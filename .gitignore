@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Data directory (contains user data - don't commit)
+data/
+
+# Legacy data files
+bookmarks.json
+bookmarks.json.legacy
+categories.json
+categories.json.legacy
+transcript-cache.json
+
+# OS files
+.DS_Store
+Thumbs.db
+._*
+
+# Local config files (not needed for Railway)
+lsw-dns.conf
+*.nginx.conf
+*.service
+transcript-server.py
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# yt-dlp binary (will be installed on Railway)
+yt-dlp
