@@ -179,6 +179,23 @@ function deleteSession(token) {
     return false;
 }
 
+// Delete all sessions for a user (used when suspending/deleting)
+function deleteUserSessions(userId) {
+    const sessions = readSessions();
+    let deleted = 0;
+    for (const [token, session] of Object.entries(sessions)) {
+        if (session.userId === userId) {
+            delete sessions[token];
+            deleted++;
+        }
+    }
+    if (deleted > 0) {
+        writeSessions(sessions);
+        console.log(`🧹 Deleted ${deleted} sessions for user ${userId}`);
+    }
+    return deleted;
+}
+
 // Get user data directory
 function getUserDataDir(userId) {
     return path.join(DATA_DIR, 'users', userId);
@@ -248,6 +265,7 @@ function getAdminStats() {
             userId,
             username: user.username,
             createdAt: user.createdAt,
+            suspended: user.suspended || false,
             videoCount,
             noteCount,
             watchTime: userWatchTime
@@ -1041,7 +1059,7 @@ setInterval(cleanExpiredSessions, 60 * 60 * 1000);
 // Create the server
 const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
@@ -1187,6 +1205,14 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
 
+            // Check if user is suspended
+            if (user.suspended) {
+                console.log(`🚫 Suspended user attempted login: ${user.username}`);
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Account suspended. Please contact support.' }));
+                return;
+            }
+
             // Verify password
             const validPassword = await bcrypt.compare(password, user.passwordHash);
             if (!validPassword) {
@@ -1328,6 +1354,144 @@ const server = http.createServer(async (req, res) => {
             console.error('Error saving watch time:', e.message);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Failed to save watch time' }));
+        }
+        return;
+    }
+
+    // Suspend/unsuspend user endpoint
+    const suspendMatch = url.pathname.match(/^\/admin\/users\/([^\/]+)\/suspend$/);
+    if (suspendMatch && req.method === 'POST') {
+        const adminUserId = authenticateRequest(req);
+
+        if (!adminUserId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        if (!isAdminUser(adminUserId)) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Admin access required' }));
+            return;
+        }
+
+        const targetUserId = suspendMatch[1];
+        const users = readUsers();
+        const targetUser = users[targetUserId];
+
+        if (!targetUser) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'User not found' }));
+            return;
+        }
+
+        // Prevent admin from suspending themselves
+        if (targetUserId === adminUserId) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Cannot suspend yourself' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const suspend = body?.suspend ?? !targetUser.suspended;
+
+            users[targetUserId].suspended = suspend;
+
+            if (!writeUsers(users)) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to update user' }));
+                return;
+            }
+
+            // If suspending, delete all their sessions
+            if (suspend) {
+                deleteUserSessions(targetUserId);
+            }
+
+            console.log(`${suspend ? '🔒' : '🔓'} Admin ${adminUserId} ${suspend ? 'suspended' : 'unsuspended'} user ${targetUser.username}`);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                userId: targetUserId,
+                suspended: suspend
+            }));
+        } catch (e) {
+            console.error('Error suspending user:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to suspend user' }));
+        }
+        return;
+    }
+
+    // Delete user endpoint
+    const deleteMatch = url.pathname.match(/^\/admin\/users\/([^\/]+)$/);
+    if (deleteMatch && req.method === 'DELETE') {
+        const adminUserId = authenticateRequest(req);
+
+        if (!adminUserId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        if (!isAdminUser(adminUserId)) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Admin access required' }));
+            return;
+        }
+
+        const targetUserId = deleteMatch[1];
+        const users = readUsers();
+        const targetUser = users[targetUserId];
+
+        if (!targetUser) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'User not found' }));
+            return;
+        }
+
+        // Prevent admin from deleting themselves
+        if (targetUserId === adminUserId) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Cannot delete yourself' }));
+            return;
+        }
+
+        try {
+            const username = targetUser.username;
+
+            // Delete user sessions
+            deleteUserSessions(targetUserId);
+
+            // Delete user from users.json
+            delete users[targetUserId];
+            if (!writeUsers(users)) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to delete user' }));
+                return;
+            }
+
+            // Delete user data directory
+            const userDataDir = getUserDataDir(targetUserId);
+            if (fs.existsSync(userDataDir)) {
+                fs.rmSync(userDataDir, { recursive: true, force: true });
+                console.log(`🗑️ Deleted user data directory: ${userDataDir}`);
+            }
+
+            console.log(`❌ Admin ${adminUserId} deleted user ${username} (${targetUserId})`);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                userId: targetUserId,
+                username: username
+            }));
+        } catch (e) {
+            console.error('Error deleting user:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to delete user' }));
         }
         return;
     }
