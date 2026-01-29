@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="emeraldGradPin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+    <linearGradient id="goldGradPin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fcd34d"/>
+      <stop offset="100%" style="stop-color:#fbbf24"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Compact pin marker -->
+  <path d="M16,1 L26,6 L26,16 L16,31 L6,16 L6,6 Z"
+        fill="url(#emeraldGradPin)" />
+
+  <!-- Play triangle -->
+  <path d="M11,9 L22,14 L11,19 Z"
+        fill="#0f172a" opacity="0.85"/>
+
+  <!-- Gold accent -->
+  <path d="M16,19 L16,31"
+        stroke="url(#goldGradPin)" stroke-width="2" stroke-linecap="round"/>
+</svg>

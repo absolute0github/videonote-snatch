@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="emeraldGradientReel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+    <linearGradient id="goldAccentReel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fcd34d"/>
+      <stop offset="100%" style="stop-color:#fbbf24"/>
+    </linearGradient>
+    <filter id="techGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Futuristic film reel segments -->
+  <g transform="translate(20, 20)">
+    <!-- Outer ring - segmented -->
+    <circle cx="80" cy="80" r="75" fill="none" stroke="url(#emeraldGradientReel)" stroke-width="12"/>
+
+    <!-- Break segments with gaps -->
+    <circle cx="80" cy="80" r="75" fill="none" stroke="#0f172a" stroke-width="14"
+            stroke-dasharray="20 30" stroke-dashoffset="0"/>
+
+    <!-- Inner ring -->
+    <circle cx="80" cy="80" r="50" fill="none" stroke="url(#emeraldGradientReel)" stroke-width="8"/>
+
+    <!-- Center hub -->
+    <circle cx="80" cy="80" r="25" fill="url(#emeraldGradientReel)"/>
+
+    <!-- Film sprocket holes (angular) -->
+    <rect x="15" y="75" width="12" height="10" fill="url(#goldAccentReel)" rx="2"/>
+    <rect x="133" y="75" width="12" height="10" fill="url(#goldAccentReel)" rx="2"/>
+    <rect x="75" y="15" width="10" height="12" fill="url(#goldAccentReel)" rx="2"/>
+    <rect x="75" y="133" width="10" height="12" fill="url(#goldAccentReel)" rx="2"/>
+
+    <!-- Center play symbol -->
+    <path d="M70,65 L100,80 L70,95 Z"
+          fill="#0f172a" filter="url(#techGlow)"/>
+
+    <!-- Gold glow ring -->
+    <circle cx="80" cy="80" r="30" fill="none" stroke="url(#goldAccentReel)" stroke-width="2" filter="url(#techGlow)"/>
+  </g>
+</svg>

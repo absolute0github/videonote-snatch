@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="emeraldGradientFrame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+    <linearGradient id="goldAccentFrame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fcd34d"/>
+      <stop offset="100%" style="stop-color:#fbbf24"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Angular video frame with folded corner -->
+  <g transform="translate(15, 25)">
+    <!-- Main frame body -->
+    <path d="M0,0 L130,0 L170,0 L170,130 L0,130 Z"
+          fill="url(#emeraldGradientFrame)" />
+
+    <!-- Folded corner (dog-ear effect) -->
+    <path d="M130,0 L170,0 L170,40 Z"
+          fill="#0f172a" opacity="0.3"/>
+    <path d="M130,0 L130,40 L170,40"
+          fill="url(#goldAccentFrame)"/>
+
+    <!-- Inner screen area (darker) -->
+    <rect x="15" y="15" width="140" height="85" fill="#0f172a" opacity="0.7" rx="3"/>
+
+    <!-- Play symbol in center -->
+    <path d="M65,40 L115,57.5 L65,75 Z"
+          fill="url(#emeraldGradientFrame)"/>
+
+    <!-- Note lines at bottom -->
+    <rect x="15" y="108" width="50" height="4" fill="url(#goldAccentFrame)" rx="2"/>
+    <rect x="15" y="118" width="80" height="4" fill="url(#goldAccentFrame)" rx="2" opacity="0.7"/>
+
+    <!-- Angular frame border accent -->
+    <path d="M0,0 L130,0 M170,40 L170,130 L0,130 L0,0"
+          fill="none" stroke="url(#goldAccentFrame)" stroke-width="3"/>
+  </g>
+</svg>

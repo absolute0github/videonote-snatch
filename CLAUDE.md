@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-YouTube Bookmarking App is a single-page React application for saving, organizing, and annotating YouTube videos. Users can bookmark videos, create notes at specific timestamps, organize bookmarks into categories, and optionally fetch video metadata and AI-generated summaries.
+**ClipMark** ("Mark the moments that matter") is a single-page React application for saving, organizing, and annotating YouTube videos. Users can bookmark videos, create notes at specific timestamps, organize bookmarks into categories, and optionally fetch video metadata and AI-generated summaries.
+
+**Brand Colors:**
+- Primary: Emerald (#10b981)
+- Primary Light: Teal (#34d399)
+- Accent: Gold/Yellow (#fbbf24)
+- Dark BG: Slate (#0f172a)
 
 **Key Features:**
 - Bookmark YouTube videos with metadata
@@ -19,7 +25,7 @@ YouTube Bookmarking App is a single-page React application for saving, organizin
 
 ## Architecture
 
-The app is a **single HTML file** (`index.html`) with React components embedded using JSX compiled by Babel. There is no build process—it runs directly in the browser.
+The app is a **single HTML file** (`app.html`) with React components embedded using JSX compiled by Babel. There is no build process—it runs directly in the browser. A separate landing page (`index.html`) provides marketing content.
 
 ### Data Flow
 

@@ -1841,9 +1841,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Static file serving for production deployment
-    // Serve index.html for root path and SPA routes (like /admin)
-    const spaRoutes = ['/', '/admin'];
-    let filePath = spaRoutes.includes(url.pathname) ? '/index.html' : url.pathname;
+    // Serve index.html for root path, app.html for /app and /admin routes
+    const appRoutes = ['/app', '/admin'];
+    let filePath;
+    if (url.pathname === '/') {
+        filePath = '/index.html';
+    } else if (appRoutes.includes(url.pathname)) {
+        filePath = '/app.html';
+    } else {
+        filePath = url.pathname;
+    }
 
     // Security: prevent directory traversal
     filePath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '');

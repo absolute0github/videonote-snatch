@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="emeraldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+    <linearGradient id="goldAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fcd34d"/>
+      <stop offset="100%" style="stop-color:#fbbf24"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Main shape: Sharp-angled bookmark with play button notch -->
+  <g transform="translate(30, 20)">
+    <!-- Bookmark body with angular design -->
+    <path d="M10,0 L130,0 L140,10 L140,155 L75,120 L10,155 L10,0 Z"
+          fill="url(#emeraldGradient)" />
+
+    <!-- Angular play button notch cutout (negative space effect) -->
+    <path d="M45,50 L105,80 L45,110 Z"
+          fill="#0f172a" opacity="0.9"/>
+
+    <!-- Gold accent strip on the right edge -->
+    <path d="M130,0 L140,10 L140,155 L130,145 L130,0 Z"
+          fill="url(#goldAccent)" />
+
+    <!-- Tech glow effect on play triangle -->
+    <path d="M50,55 L95,80 L50,105 Z"
+          fill="none" stroke="url(#goldAccent)" stroke-width="2"/>
+  </g>
+</svg>
