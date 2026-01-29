@@ -2,6 +2,9 @@
 // Run with: node transcript-server.js
 // First time: npm install
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
@@ -9,6 +12,14 @@ const path = require('path');
 const { execFile } = require('child_process');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+
+// API Keys from environment (check that they're not placeholder values)
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes('your_')
+    ? process.env.GEMINI_API_KEY
+    : null;
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY && !process.env.YOUTUBE_API_KEY.includes('your_')
+    ? process.env.YOUTUBE_API_KEY
+    : null;
 
 // Use environment port (Railway) or default to 3456
 const PORT = process.env.PORT || 3456;
@@ -171,6 +182,88 @@ function deleteSession(token) {
 // Get user data directory
 function getUserDataDir(userId) {
     return path.join(DATA_DIR, 'users', userId);
+}
+
+// Check if user is admin (by username)
+function isAdminUser(userId) {
+    const users = readUsers();
+    const user = users[userId];
+    return user?.username?.toLowerCase() === 'absolute0net';
+}
+
+// Read user watch time
+function readUserWatchTime(userId) {
+    try {
+        const filePath = path.join(getUserDataDir(userId), 'watchtime.json');
+        if (fs.existsSync(filePath)) {
+            const data = fs.readFileSync(filePath, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (e) {
+        console.error(`Error reading watch time for user ${userId}:`, e.message);
+    }
+    return {};
+}
+
+// Write user watch time
+function writeUserWatchTime(userId, watchTime) {
+    try {
+        ensureUserDataDir(userId);
+        const filePath = path.join(getUserDataDir(userId), 'watchtime.json');
+        fs.writeFileSync(filePath, JSON.stringify(watchTime, null, 2));
+        return true;
+    } catch (e) {
+        console.error(`Error writing watch time for user ${userId}:`, e.message);
+        return false;
+    }
+}
+
+// Get admin stats for all users
+function getAdminStats() {
+    const users = readUsers();
+    const userStats = [];
+    let totalVideos = 0;
+    let totalNotes = 0;
+    let totalWatchTime = 0;
+
+    for (const [userId, user] of Object.entries(users)) {
+        const bookmarks = readUserBookmarks(userId);
+        const watchTime = readUserWatchTime(userId);
+
+        // Calculate video and note counts
+        const videoCount = bookmarks.length;
+        let noteCount = 0;
+        bookmarks.forEach(video => {
+            noteCount += (video.notes || []).length;
+        });
+
+        // Calculate total watch time for this user
+        const userWatchTime = Object.values(watchTime).reduce((sum, seconds) => sum + seconds, 0);
+
+        totalVideos += videoCount;
+        totalNotes += noteCount;
+        totalWatchTime += userWatchTime;
+
+        userStats.push({
+            userId,
+            username: user.username,
+            createdAt: user.createdAt,
+            videoCount,
+            noteCount,
+            watchTime: userWatchTime
+        });
+    }
+
+    // Sort by creation date (newest first)
+    userStats.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    return {
+        totalUsers: Object.keys(users).length,
+        totalVideos,
+        totalNotes,
+        totalWatchTime,
+        users: userStats
+    };
 }
 
 // Ensure user data directory exists
@@ -1153,11 +1246,224 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({
                 valid: true,
                 userId,
-                username: user?.username || 'Unknown'
+                username: user?.username || 'Unknown',
+                isAdmin: isAdminUser(userId)
             }));
         } else {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ valid: false }));
+        }
+        return;
+    }
+
+    // =============================================
+    // ADMIN ENDPOINTS (require admin authentication)
+    // =============================================
+
+    // Admin stats endpoint
+    if (url.pathname === '/admin/stats' && req.method === 'GET') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        if (!isAdminUser(userId)) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Admin access required' }));
+            return;
+        }
+
+        try {
+            const stats = getAdminStats();
+            console.log(`📊 Admin ${userId} requested stats: ${stats.totalUsers} users`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(stats));
+        } catch (e) {
+            console.error('Error getting admin stats:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to get stats' }));
+        }
+        return;
+    }
+
+    // Watch time tracking endpoint
+    if (url.pathname === '/admin/watch-time' && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { videoId, duration } = body || {};
+
+            if (!videoId || typeof duration !== 'number' || duration < 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid videoId or duration' }));
+                return;
+            }
+
+            // Read current watch time
+            const watchTime = readUserWatchTime(userId);
+
+            // Add to existing time for this video
+            watchTime[videoId] = (watchTime[videoId] || 0) + Math.round(duration);
+
+            // Save watch time
+            if (writeUserWatchTime(userId, watchTime)) {
+                console.log(`⏱️ User ${userId} watched ${videoId} for ${duration}s (total: ${watchTime[videoId]}s)`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, totalTime: watchTime[videoId] }));
+            } else {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to save watch time' }));
+            }
+        } catch (e) {
+            console.error('Error saving watch time:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to save watch time' }));
+        }
+        return;
+    }
+
+    // =============================================
+    // API PROXY ENDPOINTS (server-side API keys)
+    // =============================================
+
+    // Check API key availability (no auth required, just returns status)
+    if (url.pathname === '/api/status' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            geminiConfigured: !!GEMINI_API_KEY,
+            youtubeConfigured: !!YOUTUBE_API_KEY
+        }));
+        return;
+    }
+
+    // Gemini API proxy - requires authentication
+    if (url.pathname === '/api/gemini' && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        if (!GEMINI_API_KEY) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Gemini API not configured on server' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { prompt, maxTokens = 2048, temperature = 0.3 } = body || {};
+
+            if (!prompt) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Prompt is required' }));
+                return;
+            }
+
+            // Call Gemini API
+            const geminiResponse = await fetchUrl(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature, maxOutputTokens: maxTokens }
+                    })
+                }
+            );
+
+            if (geminiResponse.status !== 200) {
+                console.error('Gemini API error:', geminiResponse.data);
+                res.writeHead(geminiResponse.status, { 'Content-Type': 'application/json' });
+                res.end(geminiResponse.data);
+                return;
+            }
+
+            const geminiData = JSON.parse(geminiResponse.data);
+            const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+            console.log(`🤖 Gemini API called by user ${userId}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ text: responseText }));
+        } catch (e) {
+            console.error('Gemini proxy error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Gemini API request failed' }));
+        }
+        return;
+    }
+
+    // YouTube API proxy - requires authentication
+    if (url.pathname === '/api/youtube/video' && req.method === 'GET') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        if (!YOUTUBE_API_KEY) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'YouTube API not configured on server' }));
+            return;
+        }
+
+        const videoId = url.searchParams.get('id');
+        if (!videoId) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Video ID is required' }));
+            return;
+        }
+
+        try {
+            const youtubeResponse = await fetchUrl(
+                `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${YOUTUBE_API_KEY}`
+            );
+
+            if (youtubeResponse.status !== 200) {
+                console.error('YouTube API error:', youtubeResponse.data);
+                res.writeHead(youtubeResponse.status, { 'Content-Type': 'application/json' });
+                res.end(youtubeResponse.data);
+                return;
+            }
+
+            const youtubeData = JSON.parse(youtubeResponse.data);
+            const video = youtubeData.items?.[0];
+
+            if (!video) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Video not found' }));
+                return;
+            }
+
+            console.log(`📺 YouTube API called for ${videoId} by user ${userId}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                id: video.id,
+                title: video.snippet?.title,
+                description: video.snippet?.description,
+                publishedAt: video.snippet?.publishedAt,
+                channelTitle: video.snippet?.channelTitle,
+                thumbnails: video.snippet?.thumbnails
+            }));
+        } catch (e) {
+            console.error('YouTube proxy error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'YouTube API request failed' }));
         }
         return;
     }
@@ -1371,8 +1677,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Static file serving for production deployment
-    // Serve index.html for root path
-    let filePath = url.pathname === '/' ? '/index.html' : url.pathname;
+    // Serve index.html for root path and SPA routes (like /admin)
+    const spaRoutes = ['/', '/admin'];
+    let filePath = spaRoutes.includes(url.pathname) ? '/index.html' : url.pathname;
 
     // Security: prevent directory traversal
     filePath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '');
@@ -1413,5 +1720,8 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`${'='.repeat(50)}`);
     console.log(`\nEnvironment: ${process.env.RAILWAY_ENVIRONMENT || 'local'}`);
     console.log(`Running at: http://0.0.0.0:${PORT}`);
+    console.log(`\nAPI Status:`);
+    console.log(`  Gemini AI: ${GEMINI_API_KEY ? '✅ Configured' : '❌ Not configured'}`);
+    console.log(`  YouTube Data: ${YOUTUBE_API_KEY ? '✅ Configured' : '❌ Not configured'}`);
     console.log(`\nPress Ctrl+C to stop\n`);
 });
