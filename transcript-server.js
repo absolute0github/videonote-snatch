@@ -12,6 +12,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer');
 
 // API Keys from environment (check that they're not placeholder values)
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes('your_')
@@ -23,6 +24,78 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY && !process.env.YOUTUBE_API_
 
 // Use environment port (Railway) or default to 3456
 const PORT = process.env.PORT || 3456;
+
+// Email notification configuration
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'jason@absolute0.net';
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = process.env.SMTP_PORT || 587;
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const SMTP_FROM = process.env.SMTP_FROM || 'ClipMark <noreply@clipmark.app>';
+
+// Create email transporter (if SMTP is configured)
+let emailTransporter = null;
+if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+    emailTransporter = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: parseInt(SMTP_PORT),
+        secure: parseInt(SMTP_PORT) === 465,
+        auth: {
+            user: SMTP_USER,
+            pass: SMTP_PASS
+        }
+    });
+    console.log('📧 Email notifications enabled');
+} else {
+    console.log('📧 Email notifications disabled (SMTP not configured)');
+}
+
+// Send signup notification email
+async function sendSignupNotification(username, userId) {
+    if (!emailTransporter) {
+        console.log('📧 Skipping email notification (SMTP not configured)');
+        return;
+    }
+
+    try {
+        const timestamp = new Date().toLocaleString('en-US', {
+            timeZone: 'America/New_York',
+            dateStyle: 'full',
+            timeStyle: 'long'
+        });
+
+        await emailTransporter.sendMail({
+            from: SMTP_FROM,
+            to: ADMIN_EMAIL,
+            subject: `🎉 New ClipMark signup: ${username}`,
+            html: `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">New User Signup</h1>
+                    </div>
+                    <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none;">
+                        <p style="color: #334155; font-size: 16px; margin: 0 0 20px 0;">
+                            A new user has registered for ClipMark:
+                        </p>
+                        <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <p style="margin: 0 0 10px 0;"><strong style="color: #10b981;">Username:</strong> <span style="color: #1e293b;">${username}</span></p>
+                            <p style="margin: 0 0 10px 0;"><strong style="color: #10b981;">User ID:</strong> <span style="color: #64748b; font-family: monospace; font-size: 14px;">${userId}</span></p>
+                            <p style="margin: 0;"><strong style="color: #10b981;">Time:</strong> <span style="color: #64748b;">${timestamp}</span></p>
+                        </div>
+                        <p style="color: #94a3b8; font-size: 12px; margin: 20px 0 0 0; text-align: center;">
+                            ClipMark - Mark the moments that matter
+                        </p>
+                    </div>
+                </div>
+            `,
+            text: `New ClipMark signup!\n\nUsername: ${username}\nUser ID: ${userId}\nTime: ${timestamp}`
+        });
+
+        console.log(`📧 Signup notification sent for user: ${username}`);
+    } catch (e) {
+        console.error('📧 Failed to send signup notification:', e.message);
+    }
+}
 
 // Static file serving configuration
 const STATIC_DIR = __dirname;
@@ -1142,6 +1215,9 @@ const server = http.createServer(async (req, res) => {
             const { token, expiresAt } = createSession(userId);
 
             console.log(`👤 Registered new user: ${username} (${userId})${firstUser ? ' [first user - legacy data migrated]' : ''}`);
+
+            // Send signup notification email (async, don't block response)
+            sendSignupNotification(username, userId);
 
             res.writeHead(201, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
