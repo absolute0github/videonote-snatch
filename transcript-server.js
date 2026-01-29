@@ -1280,7 +1280,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    if (url.pathname === '/' || url.pathname === '/test') {
+    if (url.pathname === '/test') {
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end(`
 <!DOCTYPE html>
