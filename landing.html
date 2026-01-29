@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VideoNoteSnatch - Never Lose Track of Important Video Moments</title>
+    <meta name="description" content="Bookmark, annotate, and organize YouTube videos with timestamped notes. Find key moments instantly with AI-powered summaries.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📹</text></svg>">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Smooth scroll */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Custom animations */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.5); }
+        }
+
+        @keyframes fade-in-up {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .animate-pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        .animate-fade-in-up {
+            animation: fade-in-up 0.6s ease-out forwards;
+        }
+
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        .delay-300 { animation-delay: 0.3s; }
+        .delay-400 { animation-delay: 0.4s; }
+
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #ef4444 0%, #f97316 50%, #eab308 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Glass effect */
+        .glass {
+            background: rgba(31, 41, 55, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        /* Feature card hover */
+        .feature-card {
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 overflow-x-hidden">
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16 sm:h-20">
+                <!-- Logo -->
+                <a href="#" class="flex items-center gap-2 sm:gap-3">
+                    <div class="w-8 h-8 sm:w-10 sm:h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <span class="text-lg sm:text-2xl font-bold text-red-500 italic">VideoNoteSnatch</span>
+                </a>
+
+                <!-- Desktop Navigation -->
+                <div class="hidden md:flex items-center gap-8">
+                    <a href="#features" class="text-gray-300 hover:text-white transition-colors">Features</a>
+                    <a href="#how-it-works" class="text-gray-300 hover:text-white transition-colors">How It Works</a>
+                    <a href="#benefits" class="text-gray-300 hover:text-white transition-colors">Benefits</a>
+                </div>
+
+                <!-- CTA Buttons -->
+                <div class="flex items-center gap-3">
+                    <a href="index.html" class="hidden sm:inline-block text-gray-300 hover:text-white transition-colors px-4 py-2">
+                        Log In
+                    </a>
+                    <a href="index.html" class="bg-red-500 hover:bg-red-600 text-white font-semibold px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg transition-all hover:shadow-lg hover:shadow-red-500/25 text-sm sm:text-base">
+                        Try Free
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="relative min-h-screen flex items-center pt-20 sm:pt-0 overflow-hidden">
+        <!-- Background gradient -->
+        <div class="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-900 to-red-900/20"></div>
+
+        <!-- Animated background elements -->
+        <div class="absolute top-1/4 left-1/4 w-64 h-64 bg-red-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
+
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
+            <div class="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+                <!-- Hero Content -->
+                <div class="text-center lg:text-left order-2 lg:order-1">
+                    <div class="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-full px-4 py-2 mb-6 animate-fade-in-up">
+                        <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                        <span class="text-red-400 text-sm font-medium">Never lose a key moment again</span>
+                    </div>
+
+                    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-6 animate-fade-in-up delay-100">
+                        Capture & Reference
+                        <span class="gradient-text block mt-2">Important Video Moments</span>
+                    </h1>
+
+                    <p class="text-lg sm:text-xl text-gray-400 mb-8 max-w-xl mx-auto lg:mx-0 animate-fade-in-up delay-200">
+                        Bookmark YouTube videos, add timestamped notes, and instantly jump back to the exact moments that matter. With AI-powered summaries to supercharge your research.
+                    </p>
+
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start animate-fade-in-up delay-300">
+                        <a href="index.html" class="bg-red-500 hover:bg-red-600 text-white font-semibold px-8 py-4 rounded-xl transition-all hover:shadow-xl hover:shadow-red-500/25 text-lg animate-pulse-glow">
+                            Start Free — No Credit Card
+                        </a>
+                        <a href="#how-it-works" class="border border-gray-700 hover:border-gray-600 text-white font-semibold px-8 py-4 rounded-xl transition-all hover:bg-gray-800/50 text-lg flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                            </svg>
+                            See How It Works
+                        </a>
+                    </div>
+
+                    <!-- Social proof -->
+                    <div class="mt-10 flex items-center gap-6 justify-center lg:justify-start animate-fade-in-up delay-400">
+                        <div class="flex -space-x-2">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-red-400 to-red-600 border-2 border-gray-900"></div>
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 border-2 border-gray-900"></div>
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 border-2 border-gray-900"></div>
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 border-2 border-gray-900"></div>
+                        </div>
+                        <p class="text-gray-400 text-sm">
+                            Join <span class="text-white font-semibold">1,000+</span> researchers & learners
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Hero Image/Demo -->
+                <div class="order-1 lg:order-2 animate-fade-in-up delay-200">
+                    <div class="relative">
+                        <!-- App mockup -->
+                        <div class="bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 overflow-hidden animate-float">
+                            <!-- Browser bar -->
+                            <div class="bg-gray-900 px-4 py-3 flex items-center gap-2 border-b border-gray-700">
+                                <div class="flex gap-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                                    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                                </div>
+                                <div class="flex-1 ml-4">
+                                    <div class="bg-gray-800 rounded-md px-3 py-1.5 text-xs text-gray-400 max-w-xs">
+                                        videonotesnatch.com
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- App preview -->
+                            <div class="p-4 space-y-4">
+                                <!-- Video player mockup -->
+                                <div class="aspect-video bg-gray-900 rounded-lg relative overflow-hidden">
+                                    <div class="absolute inset-0 flex items-center justify-center">
+                                        <div class="w-16 h-16 bg-red-500/90 rounded-full flex items-center justify-center">
+                                            <svg class="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <!-- Progress bar -->
+                                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
+                                        <div class="h-full w-2/3 bg-red-500"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Notes preview -->
+                                <div class="space-y-2">
+                                    <div class="bg-gray-700/50 rounded-lg p-3 flex items-start gap-3 border-l-2 border-red-500">
+                                        <span class="text-red-400 text-xs font-mono bg-red-500/20 px-2 py-1 rounded">2:34</span>
+                                        <p class="text-sm text-gray-300 flex-1">Key insight about data structures...</p>
+                                    </div>
+                                    <div class="bg-gray-700/50 rounded-lg p-3 flex items-start gap-3 border-l-2 border-purple-500">
+                                        <span class="text-purple-400 text-xs font-mono bg-purple-500/20 px-2 py-1 rounded">5:12</span>
+                                        <p class="text-sm text-gray-300 flex-1">Implementation example starts here</p>
+                                    </div>
+                                    <div class="bg-gray-700/50 rounded-lg p-3 flex items-start gap-3 border-l-2 border-green-500">
+                                        <span class="text-green-400 text-xs font-mono bg-green-500/20 px-2 py-1 rounded">8:45</span>
+                                        <p class="text-sm text-gray-300 flex-1">Best practices summary</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Floating badges -->
+                        <div class="absolute -top-4 -right-4 bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-bounce">
+                            AI-Powered
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scroll indicator -->
+        <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 hidden sm:block">
+            <a href="#story" class="flex flex-col items-center gap-2 text-gray-500 hover:text-gray-400 transition-colors">
+                <span class="text-sm">Scroll to explore</span>
+                <svg class="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                </svg>
+            </a>
+        </div>
+    </section>
+
+    <!-- Origin Story Section -->
+    <section id="story" class="py-16 sm:py-24 relative">
+        <div class="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900"></div>
+
+        <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <span class="text-red-500 font-semibold text-sm uppercase tracking-wider">The Problem We Solved</span>
+                <h2 class="text-3xl sm:text-4xl font-bold mt-4">
+                    Sound Familiar?
+                </h2>
+            </div>
+
+            <div class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 sm:p-10">
+                <div class="flex flex-col sm:flex-row gap-6 items-start">
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 bg-red-500/20 rounded-2xl flex items-center justify-center flex-shrink-0 mx-auto sm:mx-0">
+                        <svg class="w-8 h-8 sm:w-10 sm:h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                        </svg>
+                    </div>
+                    <blockquote class="text-lg sm:text-xl text-gray-300 leading-relaxed italic text-center sm:text-left">
+                        "I kept watching amazing educational videos and tutorials, but when I needed to reference that <span class="text-red-400 font-semibold">one specific moment</span> where they explained a key concept, I couldn't find it. I'd spend 20 minutes scrubbing through a 2-hour video, trying to remember where they said <em>'that thing'</em> about async functions.
+                        <br><br>
+                        I needed an efficient way to <span class="text-red-400 font-semibold">identify and instantly jump back to key moments</span> in videos I wanted to reference."
+                    </blockquote>
+                </div>
+
+                <div class="mt-8 pt-8 border-t border-gray-700">
+                    <p class="text-gray-400 text-center">
+                        That frustration led to <span class="text-white font-semibold">VideoNoteSnatch</span> — built by a developer, for anyone who learns from videos.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-16 sm:py-24 bg-gray-900">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12 sm:mb-16">
+                <span class="text-red-500 font-semibold text-sm uppercase tracking-wider">Features</span>
+                <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold mt-4 mb-6">
+                    Everything You Need to
+                    <span class="gradient-text"> Master Video Learning</span>
+                </h2>
+                <p class="text-gray-400 text-lg max-w-2xl mx-auto">
+                    Powerful tools designed to help you capture, organize, and instantly recall important video moments.
+                </p>
+            </div>
+
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+                <!-- Feature 1: Timestamped Notes -->
+                <div class="feature-card bg-gray-800 border border-gray-700 rounded-2xl p-6 sm:p-8">
+                    <div class="w-14 h-14 bg-red-500/20 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Timestamped Notes</h3>
+                    <p class="text-gray-400">
+                        Add notes at any moment during playback. Click a timestamp to jump right back to that exact second in the video.
+                    </p>
+                </div>
+
+                <!-- Feature 2: Smart Organization -->
+                <div class="feature-card bg-gray-800 border border-gray-700 rounded-2xl p-6 sm:p-8">
+                    <div class="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Categories & Tags</h3>
+                    <p class="text-gray-400">
+                        Organize your video library with custom categories and tags. Find any video or note in seconds with powerful search.
+                    </p>
+                </div>
+
+                <!-- Feature 3: AI Enhancement -->
+                <div class="feature-card bg-gray-800 border border-gray-700 rounded-2xl p-6 sm:p-8 relative overflow-hidden">
+                    <div class="absolute top-4 right-4 bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                        AI-Powered
+                    </div>
+                    <div class="w-14 h-14 bg-purple-500/20 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">AI Note Enhancement</h3>
+                    <p class="text-gray-400">
+                        Let AI analyze the video transcript and automatically expand your notes with context and formatting.
+                    </p>
+                </div>
+
+                <!-- Feature 4: Video Summaries -->
+                <div class="feature-card bg-gray-800 border border-gray-700 rounded-2xl p-6 sm:p-8">
+                    <div class="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">AI Video Summaries</h3>
+                    <p class="text-gray-400">
+                        Generate comprehensive summaries of entire videos with one click. Get the key points without watching it all again.
+                    </p>
+                </div>
+
+                <!-- Feature 5: Markdown Export -->
+                <div class="feature-card bg-gray-800 border border-gray-700 rounded-2xl p-6 sm:p-8">
+                    <div class="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Markdown Export</h3>
+                    <p class="text-gray-400">
+                        Export all your notes as beautifully formatted Markdown files. Perfect for Notion, Obsidian, or any note-taking app.
+                    </p>
+                </div>
+
+                <!-- Feature 6: Cloud Sync -->
+                <div class="feature-card bg-gray-800 border border-gray-700 rounded-2xl p-6 sm:p-8">
+                    <div class="w-14 h-14 bg-cyan-500/20 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Cloud Sync</h3>
+                    <p class="text-gray-400">
+                        Your bookmarks and notes sync across devices. Access your video library from anywhere, anytime.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section id="how-it-works" class="py-16 sm:py-24 bg-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12 sm:mb-16">
+                <span class="text-red-500 font-semibold text-sm uppercase tracking-wider">Simple Process</span>
+                <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold mt-4 mb-6">
+                    How It Works
+                </h2>
+                <p class="text-gray-400 text-lg max-w-2xl mx-auto">
+                    Start capturing important video moments in three simple steps.
+                </p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8 sm:gap-12">
+                <!-- Step 1 -->
+                <div class="text-center">
+                    <div class="relative inline-block mb-6">
+                        <div class="w-20 h-20 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto">
+                            <svg class="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                            </svg>
+                        </div>
+                        <div class="absolute -top-2 -right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                            1
+                        </div>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Paste a YouTube URL</h3>
+                    <p class="text-gray-400">
+                        Simply paste any YouTube video URL and it's instantly bookmarked with automatic metadata fetching.
+                    </p>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="text-center">
+                    <div class="relative inline-block mb-6">
+                        <div class="w-20 h-20 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto">
+                            <svg class="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            </svg>
+                        </div>
+                        <div class="absolute -top-2 -right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                            2
+                        </div>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Add Timestamped Notes</h3>
+                    <p class="text-gray-400">
+                        While watching, hit the note button to capture thoughts at that exact moment. Notes auto-link to the timestamp.
+                    </p>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="text-center">
+                    <div class="relative inline-block mb-6">
+                        <div class="w-20 h-20 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto">
+                            <svg class="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/>
+                            </svg>
+                        </div>
+                        <div class="absolute -top-2 -right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                            3
+                        </div>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Click to Jump Back</h3>
+                    <p class="text-gray-400">
+                        Later, find your note and click the timestamp. The video jumps to that exact moment instantly.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Demo CTA -->
+            <div class="text-center mt-12">
+                <a href="index.html" class="inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white font-semibold px-8 py-4 rounded-xl transition-all hover:shadow-xl hover:shadow-red-500/25 text-lg">
+                    Try It Now — It's Free
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Benefits Section -->
+    <section id="benefits" class="py-16 sm:py-24 bg-gray-900">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12 sm:mb-16">
+                <span class="text-red-500 font-semibold text-sm uppercase tracking-wider">Why VideoNoteSnatch</span>
+                <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold mt-4 mb-6">
+                    Benefits That Matter
+                </h2>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6 sm:gap-8">
+                <!-- Benefit 1 -->
+                <div class="bg-gradient-to-br from-gray-800 to-gray-800/50 border border-gray-700 rounded-2xl p-6 sm:p-8 flex gap-4 sm:gap-6">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">Save Hours of Re-watching</h3>
+                        <p class="text-gray-400">
+                            Stop scrubbing through long videos to find that one moment. Jump directly to any bookmarked timestamp in one click.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Benefit 2 -->
+                <div class="bg-gradient-to-br from-gray-800 to-gray-800/50 border border-gray-700 rounded-2xl p-6 sm:p-8 flex gap-4 sm:gap-6">
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">Better Learning Retention</h3>
+                        <p class="text-gray-400">
+                            Taking notes while learning improves retention by up to 34%. Timestamped notes make review sessions incredibly efficient.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Benefit 3 -->
+                <div class="bg-gradient-to-br from-gray-800 to-gray-800/50 border border-gray-700 rounded-2xl p-6 sm:p-8 flex gap-4 sm:gap-6">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">Build a Knowledge Library</h3>
+                        <p class="text-gray-400">
+                            Organize videos by category and tags. Build a searchable personal library of everything you've learned from video content.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Benefit 4 -->
+                <div class="bg-gradient-to-br from-gray-800 to-gray-800/50 border border-gray-700 rounded-2xl p-6 sm:p-8 flex gap-4 sm:gap-6">
+                    <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-2">Export & Share</h3>
+                        <p class="text-gray-400">
+                            Export notes as Markdown to share with colleagues, add to your Notion workspace, or import into any knowledge management tool.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases Section -->
+    <section class="py-16 sm:py-24 bg-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12 sm:mb-16">
+                <span class="text-red-500 font-semibold text-sm uppercase tracking-wider">Perfect For</span>
+                <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold mt-4">
+                    Who Uses VideoNoteSnatch?
+                </h2>
+            </div>
+
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Use Case 1 -->
+                <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 text-center hover:border-red-500/50 transition-colors">
+                    <div class="text-4xl mb-4">👨‍💻</div>
+                    <h3 class="text-lg font-bold mb-2">Developers</h3>
+                    <p class="text-gray-400 text-sm">
+                        Bookmark coding tutorials and jump to specific implementations
+                    </p>
+                </div>
+
+                <!-- Use Case 2 -->
+                <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 text-center hover:border-red-500/50 transition-colors">
+                    <div class="text-4xl mb-4">🎓</div>
+                    <h3 class="text-lg font-bold mb-2">Students</h3>
+                    <p class="text-gray-400 text-sm">
+                        Take notes on lecture videos and review key concepts before exams
+                    </p>
+                </div>
+
+                <!-- Use Case 3 -->
+                <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 text-center hover:border-red-500/50 transition-colors">
+                    <div class="text-4xl mb-4">📊</div>
+                    <h3 class="text-lg font-bold mb-2">Researchers</h3>
+                    <p class="text-gray-400 text-sm">
+                        Catalog video sources and reference specific quotes with timestamps
+                    </p>
+                </div>
+
+                <!-- Use Case 4 -->
+                <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 text-center hover:border-red-500/50 transition-colors">
+                    <div class="text-4xl mb-4">📚</div>
+                    <h3 class="text-lg font-bold mb-2">Lifelong Learners</h3>
+                    <p class="text-gray-400 text-sm">
+                        Build a personal video library of everything you're learning
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA Section -->
+    <section class="py-16 sm:py-24 relative overflow-hidden">
+        <!-- Background -->
+        <div class="absolute inset-0 bg-gradient-to-br from-red-900/20 via-gray-900 to-purple-900/20"></div>
+        <div class="absolute top-0 left-1/4 w-96 h-96 bg-red-500/10 rounded-full blur-3xl"></div>
+        <div class="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
+
+        <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold mb-6">
+                Ready to Never Lose a
+                <span class="gradient-text"> Key Moment</span> Again?
+            </h2>
+
+            <p class="text-lg sm:text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+                Join thousands of learners who are organizing their video knowledge more efficiently. Start for free today.
+            </p>
+
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="index.html" class="bg-red-500 hover:bg-red-600 text-white font-semibold px-10 py-4 rounded-xl transition-all hover:shadow-xl hover:shadow-red-500/25 text-lg animate-pulse-glow">
+                    Get Started Free
+                </a>
+                <a href="index.html" class="border border-gray-600 hover:border-gray-500 text-white font-semibold px-10 py-4 rounded-xl transition-all hover:bg-gray-800/50 text-lg">
+                    Log In
+                </a>
+            </div>
+
+            <p class="text-gray-500 text-sm mt-6">
+                No credit card required. Free forever for personal use.
+            </p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 border-t border-gray-800 py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                <!-- Logo -->
+                <a href="#" class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <span class="text-xl font-bold text-red-500 italic">VideoNoteSnatch</span>
+                </a>
+
+                <!-- Links -->
+                <div class="flex items-center gap-8 text-sm">
+                    <a href="#features" class="text-gray-400 hover:text-white transition-colors">Features</a>
+                    <a href="#how-it-works" class="text-gray-400 hover:text-white transition-colors">How It Works</a>
+                    <a href="index.html" class="text-gray-400 hover:text-white transition-colors">Log In</a>
+                </div>
+
+                <!-- Copyright -->
+                <p class="text-gray-500 text-sm">
+                    &copy; 2025 VideoNoteSnatch. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Smooth scroll for anchor links -->
+    <script>
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
