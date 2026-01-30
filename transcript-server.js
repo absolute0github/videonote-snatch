@@ -1397,7 +1397,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/auth/register' && req.method === 'POST') {
         try {
             const body = await parseBody(req);
-            const { username, password } = body || {};
+            const { username, password, email, firstName, lastName } = body || {};
 
             // Validate input
             if (!username || !password) {
@@ -1440,7 +1440,14 @@ const server = http.createServer(async (req, res) => {
             users[userId] = {
                 username,
                 passwordHash,
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                profile: {
+                    firstName: firstName || null,
+                    lastName: lastName || null,
+                    email: email || null,
+                    interests: [],
+                    updatedAt: Date.now()
+                }
             };
 
             if (!writeUsers(users)) {
