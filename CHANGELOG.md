@@ -67,6 +67,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - SettingsModal now has "Edit Profile" link
 - AuthModal supports embedded mode for share landing pages
 
+### Fixed
+- **Shared Video Toolbar**: "Get Context", "Enhance Notes", and "Download .md" now work for shared videos
+  - `handleLoadContext` updated to use `displayVideo` instead of `activeVideo`
+  - `handleEnhanceAllNotes` and `handleApplyEnhancements` updated to support shared videos
+  - Enhancement toolbar now visible for shared videos
+
 ### Files Modified
 - `transcript-server.js` - Added profile and sharing endpoints (~600 lines)
 - `app.html` - Added ProfileModal, ShareModal, PendingSharesDropdown components (~400 lines)

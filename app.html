@@ -4009,17 +4009,19 @@ Only return the JSON object, no other text.`;
 
             // Function to load transcript context into note field
             const handleLoadContext = async () => {
-                if (!activeVideo) return;
+                // Use displayVideo to support both regular and shared videos
+                const video = activeSharedVideo || videos.find(v => v.id === activeVideoId);
+                if (!video) return;
 
                 setIsLoadingContext(true);
 
                 try {
                     // Use cached transcript or fetch new one
                     let transcript = cachedTranscript;
-                    if (!transcript || cachedTranscript?.videoId !== activeVideo.videoId) {
-                        transcript = await fetchTranscript(activeVideo.videoId);
+                    if (!transcript || cachedTranscript?.videoId !== video.videoId) {
+                        transcript = await fetchTranscript(video.videoId);
                         if (transcript) {
-                            setCachedTranscript({ videoId: activeVideo.videoId, data: transcript });
+                            setCachedTranscript({ videoId: video.videoId, data: transcript });
                             transcript = transcript;
                         }
                     } else {
@@ -4403,8 +4405,11 @@ Only return the JSON object, no other text.`;
 
             // Enhance all notes with AI summarization
             const handleEnhanceAllNotes = async () => {
-                const activeVideo = videos.find(v => v.id === activeVideoId);
-                if (!activeVideo || !activeVideo.notes || activeVideo.notes.length === 0) {
+                // Support both regular videos and shared videos
+                const video = activeSharedVideo || videos.find(v => v.id === activeVideoId);
+                const isShared = !!activeSharedVideo;
+
+                if (!video || !video.notes || video.notes.length === 0) {
                     alert('No notes to enhance for this video');
                     return;
                 }
@@ -4415,15 +4420,15 @@ Only return the JSON object, no other text.`;
                 }
 
                 setIsEnhancing(true);
-                setEnhancementProgress({ current: 0, total: activeVideo.notes.length });
+                setEnhancementProgress({ current: 0, total: video.notes.length });
 
                 try {
                     // Fetch transcript
                     let transcript = cachedTranscript?.data;
-                    if (!transcript || cachedTranscript?.videoId !== activeVideo.videoId) {
-                        transcript = await fetchTranscript(activeVideo.videoId);
+                    if (!transcript || cachedTranscript?.videoId !== video.videoId) {
+                        transcript = await fetchTranscript(video.videoId);
                         if (transcript) {
-                            setCachedTranscript({ videoId: activeVideo.videoId, data: transcript });
+                            setCachedTranscript({ videoId: video.videoId, data: transcript });
                         }
                     }
 
@@ -4437,9 +4442,9 @@ Only return the JSON object, no other text.`;
                     const ambiguousNotes = [];
 
                     // Process each note
-                    for (let i = 0; i < activeVideo.notes.length; i++) {
-                        const note = activeVideo.notes[i];
-                        setEnhancementProgress({ current: i + 1, total: activeVideo.notes.length });
+                    for (let i = 0; i < video.notes.length; i++) {
+                        const note = video.notes[i];
+                        setEnhancementProgress({ current: i + 1, total: video.notes.length });
 
                         try {
                             // Get extended context around the note timestamp
@@ -4506,13 +4511,24 @@ Only return the JSON object, no other text.`;
                     }
 
                     // Update video with enhanced notes (non-ambiguous ones)
-                    const updatedVideos = videos.map(v => {
-                        if (v.id === activeVideoId) {
-                            return { ...v, notes: enhancedNotes };
-                        }
-                        return v;
-                    });
-                    setVideos(updatedVideos);
+                    if (isShared) {
+                        // Update shared video
+                        const updatedSharedVideo = { ...video, notes: enhancedNotes };
+                        setSharedWithMe(prev => prev.map(shared =>
+                            shared.shareId === video.shareId ? updatedSharedVideo : shared
+                        ));
+                        setActiveSharedVideo(updatedSharedVideo);
+                        saveSharedVideosToServer(video.shareId, enhancedNotes);
+                    } else {
+                        // Update regular video
+                        const updatedVideos = videos.map(v => {
+                            if (v.id === activeVideoId) {
+                                return { ...v, notes: enhancedNotes };
+                            }
+                            return v;
+                        });
+                        setVideos(updatedVideos);
+                    }
 
                     // If there are ambiguous notes, show review modal
                     if (ambiguousNotes.length > 0) {
@@ -4520,7 +4536,7 @@ Only return the JSON object, no other text.`;
                         setShowEnhancementReview(true);
                     }
 
-                    console.log(`✅ Enhanced ${activeVideo.notes.length - ambiguousNotes.length} notes, ${ambiguousNotes.length} need review`);
+                    console.log(`✅ Enhanced ${video.notes.length - ambiguousNotes.length} notes, ${ambiguousNotes.length} need review`);
 
                 } catch (error) {
                     console.error('Enhancement failed:', error);
@@ -4533,10 +4549,13 @@ Only return the JSON object, no other text.`;
 
             // Apply selected enhancements from review modal
             const handleApplyEnhancements = (selections) => {
-                const activeVideo = videos.find(v => v.id === activeVideoId);
-                if (!activeVideo) return;
+                // Support both regular and shared videos
+                const video = activeSharedVideo || videos.find(v => v.id === activeVideoId);
+                const isShared = !!activeSharedVideo;
 
-                const updatedNotes = activeVideo.notes.map(note => {
+                if (!video) return;
+
+                const updatedNotes = video.notes.map(note => {
                     const selection = selections.find(s => s.noteId === note.id);
                     if (selection) {
                         // Only mark as enhanced if text actually changed
@@ -4551,14 +4570,25 @@ Only return the JSON object, no other text.`;
                     return note;
                 });
 
-                const updatedVideos = videos.map(v => {
-                    if (v.id === activeVideoId) {
-                        return { ...v, notes: updatedNotes };
-                    }
-                    return v;
-                });
+                if (isShared) {
+                    // Update shared video
+                    const updatedSharedVideo = { ...video, notes: updatedNotes };
+                    setSharedWithMe(prev => prev.map(shared =>
+                        shared.shareId === video.shareId ? updatedSharedVideo : shared
+                    ));
+                    setActiveSharedVideo(updatedSharedVideo);
+                    saveSharedVideosToServer(video.shareId, updatedNotes);
+                } else {
+                    // Update regular video
+                    const updatedVideos = videos.map(v => {
+                        if (v.id === activeVideoId) {
+                            return { ...v, notes: updatedNotes };
+                        }
+                        return v;
+                    });
+                    setVideos(updatedVideos);
+                }
 
-                setVideos(updatedVideos);
                 setPendingEnhancements([]);
                 setShowEnhancementReview(false);
             };
@@ -5226,14 +5256,14 @@ Only return the JSON object, no other text.`;
                                             </div>
                                         </div>
 
-                                        {/* Enhancement Toolbar - only for owned videos */}
-                                        {activeVideo && !displayVideo?.isShared && (
+                                        {/* Enhancement Toolbar - works for both regular and shared videos */}
+                                        {displayVideo && (
                                             <div className="w-full max-w-3xl mx-auto mb-4">
                                                 <div className="bg-gray-800 rounded-lg px-4 py-3 flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
                                                         <button
                                                             onClick={handleEnhanceAllNotes}
-                                                            disabled={isEnhancing || !activeVideo.notes || activeVideo.notes.length === 0 || !apiStatus.geminiConfigured}
+                                                            disabled={isEnhancing || !displayVideo.notes || displayVideo.notes.length === 0 || !apiStatus.geminiConfigured}
                                                             className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
                                                             title={!apiStatus.geminiConfigured ? "Gemini AI not configured on server" : "Enhance all notes with AI"}
                                                         >
@@ -5253,8 +5283,8 @@ Only return the JSON object, no other text.`;
                                                             )}
                                                         </button>
                                                         <button
-                                                            onClick={() => handleExportMarkdown(activeVideo)}
-                                                            disabled={!activeVideo.notes || activeVideo.notes.length === 0}
+                                                            onClick={() => handleExportMarkdown(displayVideo)}
+                                                            disabled={!displayVideo.notes || displayVideo.notes.length === 0}
                                                             className="flex items-center gap-2 px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
                                                             title="Download notes as Markdown file"
                                                         >
