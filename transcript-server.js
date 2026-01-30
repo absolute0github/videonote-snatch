@@ -106,8 +106,9 @@ async function sendShareInvitationEmail(share, ownerUsername) {
 
     try {
         // Construct share URL - use APP_URL from env or default
+        // Link to /app route where share preview logic lives
         const appUrl = process.env.APP_URL || 'http://localhost:3456';
-        const shareLink = `${appUrl}?share_token=${share.shareToken}`;
+        const shareLink = `${appUrl}/app?share_token=${share.shareToken}`;
 
         const emailHtml = `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">

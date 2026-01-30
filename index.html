@@ -18,6 +18,16 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
+    <!-- Redirect share links to app -->
+    <script>
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('share_token')) {
+                window.location.href = '/app' + window.location.search;
+            }
+        })();
+    </script>
+
     <style>
         * {
             font-family: 'Inter', sans-serif;
