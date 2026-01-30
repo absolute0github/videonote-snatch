@@ -13,9 +13,24 @@
 
 ~~I want to be notified via email each time someone signs up.~~ ✅ Implemented
 
+~~Email sharing with invite links for non-users~~ ✅ Implemented (2026-01-30)
+- Requires `APP_URL` environment variable to be set in Railway
+- Requires verified domain in Resend (sandbox only sends to your own email)
+
 To monetize, what do recommend as as far as system limitations for a "free version" and different pricing tiers?
 
 Can I also assign friends/testers with a paid version
+
+---
+
+## Known Issues / Bugs to Fix
+
+1. **Session persistence on Railway** - Sessions are lost when Railway redeploys (ephemeral filesystem)
+   - Current workaround: Users need to log out and log back in after deployment
+   - Proper fix: Use Railway persistent volume for `/data` directory, or use Redis/PostgreSQL for sessions
+
+2. **Email share requires domain verification** - Resend sandbox only sends to your own email
+   - Fix: Verify a custom domain in Resend dashboard and set `EMAIL_FROM` env var
 
 ---
 

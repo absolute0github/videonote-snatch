@@ -72,6 +72,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `handleLoadContext` updated to use `displayVideo` instead of `activeVideo`
   - `handleEnhanceAllNotes` and `handleApplyEnhancements` updated to support shared videos
   - Enhancement toolbar now visible for shared videos
+- **Shared Video Transcript**: Fixed transcript fetching for shared videos
+  - Shared videos use `youtubeVideoId` property, not `videoId`
+  - Updated `handleLoadContext` and `handleEnhanceAllNotes` to use correct property
+- **Email Share Links**: Fixed share links pointing to wrong page
+  - Links now go to `/app?share_token=xxx` instead of `/?share_token=xxx`
+  - Landing page (`index.html`) redirects to `/app` if share_token is present
+- **Registration Fields**: Added optional email, first name, last name to registration form
+  - Fields saved to user profile on signup
+  - Supports collecting user info when signing up via share link
+
+### Known Issues
+- **Session Persistence on Railway**: Sessions may be lost on redeploy (ephemeral filesystem)
+  - Workaround: Log out and log back in after deployment
+  - Future fix: Use Railway persistent volume or external session store
 
 ### Files Modified
 - `transcript-server.js` - Added profile and sharing endpoints (~600 lines)
