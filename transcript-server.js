@@ -161,12 +161,16 @@ async function sendShareInvitationEmail(share, ownerUsername) {
 
         if (!response.ok) {
             const error = await response.json();
+            console.error(`📧 Resend API error response:`, JSON.stringify(error));
             throw new Error(error.message || `HTTP ${response.status}`);
         }
 
-        console.log(`📧 Share invitation sent to: ${share.targetEmail}`);
+        const result = await response.json();
+        console.log(`📧 Share invitation sent to: ${share.targetEmail} (ID: ${result.id})`);
     } catch (e) {
-        console.error('📧 Failed to send share invitation:', e.message);
+        console.error(`📧 Failed to send share invitation to ${share.targetEmail}:`, e.message);
+        // Log additional context for debugging
+        console.error(`📧 EMAIL_FROM: ${EMAIL_FROM}, Share token: ${share.shareToken?.substring(0, 8)}...`);
     }
 }
 
@@ -1894,10 +1898,15 @@ const server = http.createServer(async (req, res) => {
             console.log(`📤 Share created: ${ownerUser.username} -> ${type === 'user' ? users[targetUserId].username : targetEmail} (${videoTitle})`);
 
             // If email share, send the invitation email
-            if (type === 'email' && RESEND_API_KEY) {
-                sendShareInvitationEmail(share, ownerUser.username).catch(e => {
-                    console.error('Failed to send share invitation email:', e.message);
-                });
+            if (type === 'email') {
+                if (RESEND_API_KEY) {
+                    console.log(`📧 Attempting to send share invitation to: ${targetEmail}`);
+                    sendShareInvitationEmail(share, ownerUser.username).catch(e => {
+                        console.error('Failed to send share invitation email:', e.message);
+                    });
+                } else {
+                    console.log(`📧 Email share created but RESEND_API_KEY not configured - no email sent to: ${targetEmail}`);
+                }
             }
 
             res.writeHead(201, { 'Content-Type': 'application/json' });
