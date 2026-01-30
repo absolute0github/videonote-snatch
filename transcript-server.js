@@ -1989,6 +1989,53 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Update notes on a shared video
+    if (url.pathname === '/api/shares/library' && req.method === 'PUT') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { shareId, notes } = JSON.parse(body);
+
+                if (!shareId) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'shareId is required' }));
+                    return;
+                }
+
+                const sharedWithMe = readUserSharedWithMe(userId);
+                const index = sharedWithMe.findIndex(s => s.shareId === shareId);
+
+                if (index === -1) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Shared video not found' }));
+                    return;
+                }
+
+                // Update notes for the shared video
+                sharedWithMe[index].notes = notes || [];
+                writeUserSharedWithMe(userId, sharedWithMe);
+
+                console.log(`✅ Updated notes for shared video ${shareId} for user ${userId}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (e) {
+                console.error('Error updating shared video notes:', e.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to update notes' }));
+            }
+        });
+        return;
+    }
+
     // Accept a share
     const acceptMatch = url.pathname.match(/^\/api\/shares\/([^\/]+)\/accept$/);
     if (acceptMatch && req.method === 'POST') {

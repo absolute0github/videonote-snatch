@@ -39,6 +39,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Accept/decline workflow for recipients
   - PendingSharesDropdown notification in header
   - "Shared with me" tab in sidebar for accepted shares
+- **Shared Video Playback**: Click shared videos to view in player with notes
+  - Opens in embedded player instead of linking to YouTube
+  - Shows "Shared by [username]" badge on shared videos
+  - Recipients can add, edit, and delete notes on shared videos
+- **Note Author Attribution**: Notes show first 3 letters of author's username
+  - Author badge displayed on each note
+  - Hover shows full username
+- **Shared Notes Persistence**: PUT `/api/shares/library` endpoint saves shared video notes
 - **Video Sharing (Email)**: Share videos via email invitation to non-users
   - Branded email invitation sent via Resend API
   - Share landing page with video preview

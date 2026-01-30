@@ -772,6 +772,14 @@ Only return the JSON object, no other text.`;
                                     {showOriginal ? 'Original' : 'Enhanced'}
                                 </button>
                             )}
+                            {note.author && (
+                                <span
+                                    className="text-xs px-2 py-0.5 rounded-full bg-gray-600 text-gray-300"
+                                    title={`Added by ${note.authorFull || note.author}`}
+                                >
+                                    {note.author}
+                                </span>
+                            )}
                         </div>
                         <div className="flex gap-1">
                             <button
@@ -3208,6 +3216,7 @@ Only return the JSON object, no other text.`;
             const [videos, setVideos] = useState([]);
             const [categories, setCategories] = useState([]);
             const [activeVideoId, setActiveVideoId] = useState(null);
+            const [activeSharedVideo, setActiveSharedVideo] = useState(null); // For viewing shared videos
             const [currentTime, setCurrentTime] = useState(0);
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedCategory, setSelectedCategory] = useState('all');
@@ -4045,6 +4054,17 @@ Only return the JSON object, no other text.`;
 
             const activeVideo = videos.find(v => v.id === activeVideoId);
 
+            // Computed video for player - either regular or shared video
+            const displayVideo = activeSharedVideo ? {
+                id: activeSharedVideo.shareId,
+                videoId: activeSharedVideo.youtubeVideoId,
+                title: activeSharedVideo.videoTitle,
+                thumbnail: activeSharedVideo.videoThumbnail,
+                notes: activeSharedVideo.notes || [],
+                isShared: true,
+                sharedFrom: activeSharedVideo.fromUsername
+            } : activeVideo;
+
             // Filter videos
             const filteredVideos = videos.filter(video => {
                 const matchesSearch = searchQuery === '' ||
@@ -4183,18 +4203,43 @@ Only return the JSON object, no other text.`;
 
             // Note handlers
             const handleAddNote = () => {
-                if (!newNote.trim() || !activeVideoId) return;
+                if (!newNote.trim()) return;
 
+                // Get author info (first 3 letters of username, uppercase)
+                const authorShort = currentUser?.username?.substring(0, 3).toUpperCase() || 'USR';
+                const authorFull = currentUser?.username || 'Unknown';
+
+                const newNoteObj = {
+                    id: generateId(),
+                    text: newNote.trim(),
+                    timestamp: currentTime,
+                    createdAt: new Date().toISOString(),
+                    author: authorShort,
+                    authorFull: authorFull
+                };
+
+                // Handle shared videos
+                if (activeSharedVideo) {
+                    const updatedNotes = [...(activeSharedVideo.notes || []), newNoteObj].sort((a, b) => b.timestamp - a.timestamp);
+                    const updatedSharedVideo = { ...activeSharedVideo, notes: updatedNotes };
+
+                    setSharedWithMe(prev => prev.map(shared =>
+                        shared.shareId === activeSharedVideo.shareId ? updatedSharedVideo : shared
+                    ));
+                    setActiveSharedVideo(updatedSharedVideo);
+                    // Save updated shared videos to server
+                    saveSharedVideosToServer(activeSharedVideo.shareId, updatedNotes);
+                    setNewNote('');
+                    return;
+                }
+
+                // Handle regular videos
+                if (!activeVideoId) return;
                 setVideos(prev => prev.map(video => {
                     if (video.id === activeVideoId) {
                         return {
                             ...video,
-                            notes: [...(video.notes || []), {
-                                id: generateId(),
-                                text: newNote.trim(),
-                                timestamp: currentTime,
-                                createdAt: new Date().toISOString()
-                            }].sort((a, b) => b.timestamp - a.timestamp)
+                            notes: [...(video.notes || []), newNoteObj].sort((a, b) => b.timestamp - a.timestamp)
                         };
                     }
                     return video;
@@ -4202,7 +4247,43 @@ Only return the JSON object, no other text.`;
                 setNewNote('');
             };
 
+            // Save shared video notes to server
+            const saveSharedVideosToServer = async (shareId, notes) => {
+                if (!authToken || !shareId) return;
+                try {
+                    const response = await fetch(`${SERVER_URL}/api/shares/library`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify({ shareId, notes })
+                    });
+                    if (response.ok) {
+                        console.log('✅ Shared video notes saved to server');
+                    } else {
+                        console.warn('⚠️ Failed to save shared video notes to server');
+                    }
+                } catch (e) {
+                    console.error('❌ Error saving shared video notes:', e.message);
+                }
+            };
+
             const handleDeleteNote = (noteId) => {
+                // Handle shared videos
+                if (activeSharedVideo) {
+                    const updatedNotes = (activeSharedVideo.notes || []).filter(n => n.id !== noteId);
+                    const updatedSharedVideo = { ...activeSharedVideo, notes: updatedNotes };
+
+                    setSharedWithMe(prev => prev.map(shared =>
+                        shared.shareId === activeSharedVideo.shareId ? updatedSharedVideo : shared
+                    ));
+                    setActiveSharedVideo(updatedSharedVideo);
+                    saveSharedVideosToServer(activeSharedVideo.shareId, updatedNotes);
+                    return;
+                }
+
+                // Handle regular videos
                 setVideos(prev => prev.map(video => {
                     if (video.id === activeVideoId) {
                         return {
@@ -4215,6 +4296,22 @@ Only return the JSON object, no other text.`;
             };
 
             const handleEditNote = (noteId, newText) => {
+                // Handle shared videos
+                if (activeSharedVideo) {
+                    const updatedNotes = (activeSharedVideo.notes || []).map(n =>
+                        n.id === noteId ? { ...n, text: newText } : n
+                    ).sort((a, b) => b.timestamp - a.timestamp);
+                    const updatedSharedVideo = { ...activeSharedVideo, notes: updatedNotes };
+
+                    setSharedWithMe(prev => prev.map(shared =>
+                        shared.shareId === activeSharedVideo.shareId ? updatedSharedVideo : shared
+                    ));
+                    setActiveSharedVideo(updatedSharedVideo);
+                    saveSharedVideosToServer(activeSharedVideo.shareId, updatedNotes);
+                    return;
+                }
+
+                // Handle regular videos
                 setVideos(prev => prev.map(video => {
                     if (video.id === activeVideoId) {
                         return {
@@ -4982,6 +5079,7 @@ Only return the JSON object, no other text.`;
                                             <button
                                                 onClick={() => {
                                                     setActiveVideoId(video.id);
+                                                    setActiveSharedVideo(null); // Clear any shared video
                                                     setShowLibrary(false);
                                                     setNoteSearch('');
                                                 }}
@@ -5032,10 +5130,15 @@ Only return the JSON object, no other text.`;
                                                 {sharedWithMe.map(shared => (
                                                     <div
                                                         key={shared.shareId}
-                                                        className="cursor-pointer rounded-lg overflow-hidden transition-all hover:ring-2 hover:ring-gray-600"
+                                                        className={`cursor-pointer rounded-lg overflow-hidden transition-all hover:ring-2 hover:ring-gray-600 ${
+                                                            activeSharedVideo?.shareId === shared.shareId ? 'ring-2 ring-blue-500' : ''
+                                                        }`}
                                                         onClick={() => {
-                                                            // Open YouTube video in new tab since shared videos aren't in the user's library
-                                                            window.open(`https://www.youtube.com/watch?v=${shared.youtubeVideoId}`, '_blank');
+                                                            // Open shared video in player view
+                                                            setActiveSharedVideo(shared);
+                                                            setActiveVideoId(null); // Clear regular video
+                                                            setShowLibrary(false);
+                                                            setNoteSearch('');
                                                         }}
                                                     >
                                                         <div className="relative group">
@@ -5081,6 +5184,7 @@ Only return the JSON object, no other text.`;
                                                         isActive={video.id === activeVideoId}
                                                         onClick={() => {
                                                             setActiveVideoId(video.id);
+                                                            setActiveSharedVideo(null); // Clear any shared video
                                                             setShowLibrary(false);
                                                             setShowSharedWithMe(false);
                                                             setNoteSearch('');
@@ -5114,7 +5218,7 @@ Only return the JSON object, no other text.`;
                                         <div className="w-full max-w-3xl mx-auto shrink-0 mb-4">
                                             <div className="aspect-video bg-black rounded-lg overflow-hidden">
                                                 <YouTubePlayer
-                                                    videoId={activeVideo?.videoId}
+                                                    videoId={displayVideo?.videoId}
                                                     onTimeUpdate={setCurrentTime}
                                                     playerRef={playerRef}
                                                     onWatchTime={trackWatchTime}
@@ -5122,8 +5226,8 @@ Only return the JSON object, no other text.`;
                                             </div>
                                         </div>
 
-                                        {/* Enhancement Toolbar */}
-                                        {activeVideo && (
+                                        {/* Enhancement Toolbar - only for owned videos */}
+                                        {activeVideo && !displayVideo?.isShared && (
                                             <div className="w-full max-w-3xl mx-auto mb-4">
                                                 <div className="bg-gray-800 rounded-lg px-4 py-3 flex items-center justify-between">
                                                     <div className="flex items-center gap-3">
@@ -5168,13 +5272,19 @@ Only return the JSON object, no other text.`;
                                         )}
 
                                         {/* Video Info & Note Input */}
-                                        {activeVideo && (
+                                        {displayVideo && (
                                             <div className="w-full max-w-3xl mx-auto flex-1 overflow-y-auto min-h-0">
                                                 <div className="flex items-start justify-between mb-4">
                                                     <div>
-                                                        <h2 className="text-xl font-semibold">{activeVideo.title}</h2>
+                                                        <h2 className="text-xl font-semibold">{displayVideo.title}</h2>
                                                         <div className="flex items-center gap-2 mt-1">
-                                                            {activeVideo.tags?.map(tag => (
+                                                            {displayVideo.isShared && (
+                                                                <span className="flex items-center gap-1 text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full">
+                                                                    <Icons.Users />
+                                                                    Shared by {displayVideo.sharedFrom}
+                                                                </span>
+                                                            )}
+                                                            {displayVideo.tags?.map(tag => (
                                                                 <span key={tag} className="flex items-center gap-1 text-xs bg-gray-700 px-2 py-1 rounded-full">
                                                                     <Icons.Tag />
                                                                     {tag}
@@ -5183,25 +5293,44 @@ Only return the JSON object, no other text.`;
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <button
-                                                            onClick={() => {
-                                                                setShareVideo(activeVideo);
-                                                                setShowShareModal(true);
-                                                            }}
-                                                            className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-blue-400"
-                                                            title="Share video"
-                                                        >
-                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                                                            </svg>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteVideo(activeVideo.id)}
-                                                            className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-emerald-400"
-                                                            title="Delete video"
-                                                        >
-                                                            <Icons.Trash />
-                                                        </button>
+                                                        {!displayVideo.isShared && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setShareVideo(activeVideo);
+                                                                        setShowShareModal(true);
+                                                                    }}
+                                                                    className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-blue-400"
+                                                                    title="Share video"
+                                                                >
+                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                                                    </svg>
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteVideo(activeVideo.id)}
+                                                                    className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-emerald-400"
+                                                                    title="Delete video"
+                                                                >
+                                                                    <Icons.Trash />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        {displayVideo.isShared && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setActiveSharedVideo(null);
+                                                                    setShowLibrary(true);
+                                                                    setShowSharedWithMe(true);
+                                                                }}
+                                                                className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-emerald-400"
+                                                                title="Back to shared videos"
+                                                            >
+                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                                                </svg>
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -5262,24 +5391,26 @@ Only return the JSON object, no other text.`;
                                     </div>
 
                                     {/* Notes Panel */}
-                                    {activeVideo && (
+                                    {displayVideo && (
                                         <aside className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col shrink-0">
                                             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-                                                <h3 className="font-semibold">Notes ({activeVideo.notes?.length || 0})</h3>
+                                                <h3 className="font-semibold">Notes ({displayVideo.notes?.length || 0})</h3>
                                                 <div className="flex gap-1">
-                                                    <button
-                                                        onClick={() => handleImportNotes(activeVideo)}
-                                                        className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs font-medium transition-colors flex items-center gap-1"
-                                                        title="Import notes from text file"
-                                                    >
+                                                    {!displayVideo.isShared && (
+                                                        <button
+                                                            onClick={() => handleImportNotes(activeVideo)}
+                                                            className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs font-medium transition-colors flex items-center gap-1"
+                                                            title="Import notes from text file"
+                                                        >
                                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                                         </svg>
                                                         Import
-                                                    </button>
+                                                        </button>
+                                                    )}
                                                     <button
-                                                        onClick={() => handleExportNotes(activeVideo)}
-                                                        disabled={!activeVideo.notes || activeVideo.notes.length === 0}
+                                                        onClick={() => handleExportNotes(displayVideo)}
+                                                        disabled={!displayVideo.notes || displayVideo.notes.length === 0}
                                                         className="px-3 py-1 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 rounded text-xs font-medium transition-colors flex items-center gap-1"
                                                         title="Export notes as text file"
                                                     >
@@ -5291,7 +5422,7 @@ Only return the JSON object, no other text.`;
                                                 </div>
                                             </div>
                                             {/* Notes Search */}
-                                            {activeVideo.notes?.length > 0 && (
+                                            {displayVideo.notes?.length > 0 && (
                                                 <div className="px-4 pt-3 pb-2 border-b border-gray-700">
                                                     <div className="relative">
                                                         <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5317,17 +5448,17 @@ Only return the JSON object, no other text.`;
                                                     </div>
                                                     {noteSearch && (
                                                         <p className="text-xs text-gray-500 mt-1">
-                                                            {activeVideo.notes.filter(n => n.text.toLowerCase().includes(noteSearch.toLowerCase())).length} of {activeVideo.notes.length} notes
+                                                            {displayVideo.notes.filter(n => n.text.toLowerCase().includes(noteSearch.toLowerCase())).length} of {displayVideo.notes.length} notes
                                                         </p>
                                                     )}
                                                 </div>
                                             )}
                                             <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
-                                                {activeVideo.notes?.length > 0 ? (
+                                                {displayVideo.notes?.length > 0 ? (
                                                     (() => {
                                                         const filteredNotes = noteSearch
-                                                            ? activeVideo.notes.filter(n => n.text.toLowerCase().includes(noteSearch.toLowerCase()))
-                                                            : activeVideo.notes;
+                                                            ? displayVideo.notes.filter(n => n.text.toLowerCase().includes(noteSearch.toLowerCase()))
+                                                            : displayVideo.notes;
                                                         return filteredNotes.length > 0 ? (
                                                             filteredNotes.map(note => (
                                                                 <NoteItem
