@@ -4013,15 +4013,18 @@ Only return the JSON object, no other text.`;
                 const video = activeSharedVideo || videos.find(v => v.id === activeVideoId);
                 if (!video) return;
 
+                // Get the YouTube video ID - shared videos use youtubeVideoId, regular videos use videoId
+                const ytVideoId = activeSharedVideo ? video.youtubeVideoId : video.videoId;
+
                 setIsLoadingContext(true);
 
                 try {
                     // Use cached transcript or fetch new one
                     let transcript = cachedTranscript;
-                    if (!transcript || cachedTranscript?.videoId !== video.videoId) {
-                        transcript = await fetchTranscript(video.videoId);
+                    if (!transcript || cachedTranscript?.videoId !== ytVideoId) {
+                        transcript = await fetchTranscript(ytVideoId);
                         if (transcript) {
-                            setCachedTranscript({ videoId: video.videoId, data: transcript });
+                            setCachedTranscript({ videoId: ytVideoId, data: transcript });
                             transcript = transcript;
                         }
                     } else {
@@ -4419,16 +4422,19 @@ Only return the JSON object, no other text.`;
                     return;
                 }
 
+                // Get the YouTube video ID - shared videos use youtubeVideoId, regular videos use videoId
+                const ytVideoId = isShared ? video.youtubeVideoId : video.videoId;
+
                 setIsEnhancing(true);
                 setEnhancementProgress({ current: 0, total: video.notes.length });
 
                 try {
                     // Fetch transcript
                     let transcript = cachedTranscript?.data;
-                    if (!transcript || cachedTranscript?.videoId !== video.videoId) {
-                        transcript = await fetchTranscript(video.videoId);
+                    if (!transcript || cachedTranscript?.videoId !== ytVideoId) {
+                        transcript = await fetchTranscript(ytVideoId);
                         if (transcript) {
-                            setCachedTranscript({ videoId: video.videoId, data: transcript });
+                            setCachedTranscript({ videoId: ytVideoId, data: transcript });
                         }
                     }
 
