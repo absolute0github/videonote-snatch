@@ -97,6 +97,134 @@ async function sendSignupNotification(username, userId) {
     }
 }
 
+// Send share invitation email (for email shares to non-users)
+async function sendShareInvitationEmail(share, ownerUsername) {
+    if (!RESEND_API_KEY) {
+        console.log('📧 Skipping share invitation email (Resend not configured)');
+        return;
+    }
+
+    try {
+        // Construct share URL - use APP_URL from env or default
+        const appUrl = process.env.APP_URL || 'http://localhost:3456';
+        const shareLink = `${appUrl}?share_token=${share.shareToken}`;
+
+        const emailHtml = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+                    <h1 style="color: white; margin: 0; font-size: 24px;">Video Shared With You</h1>
+                </div>
+                <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none;">
+                    <p style="color: #334155; font-size: 16px; margin: 0 0 20px 0;">
+                        <strong style="color: #10b981;">${ownerUsername}</strong> wants to share a video with you!
+                    </p>
+
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+                        <div style="display: flex; gap: 15px;">
+                            <img src="${share.videoThumbnail}" alt="" style="width: 120px; height: 68px; border-radius: 4px; object-fit: cover;" />
+                            <div>
+                                <p style="margin: 0 0 5px 0; font-weight: 600; color: #1e293b;">${share.videoTitle}</p>
+                                ${share.includeNotes ? '<p style="margin: 0; color: #64748b; font-size: 14px;">Includes notes</p>' : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <a href="${shareLink}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #34d399 100%); color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                        Join ClipMark to View
+                    </a>
+
+                    <p style="color: #64748b; font-size: 14px; margin: 20px 0 0 0;">
+                        ClipMark helps you save, organize, and annotate YouTube videos with timestamped notes.
+                    </p>
+
+                    <p style="color: #94a3b8; font-size: 12px; margin: 20px 0 0 0;">
+                        This invitation expires in 30 days.
+                    </p>
+                </div>
+            </div>
+        `;
+
+        const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${RESEND_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                from: EMAIL_FROM,
+                to: [share.targetEmail],
+                subject: `${ownerUsername} wants to share a video with you on ClipMark`,
+                html: emailHtml,
+                text: `${ownerUsername} wants to share "${share.videoTitle}" with you on ClipMark!\n\nJoin here: ${shareLink}\n\nThis link expires in 30 days.`
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || `HTTP ${response.status}`);
+        }
+
+        console.log(`📧 Share invitation sent to: ${share.targetEmail}`);
+    } catch (e) {
+        console.error('📧 Failed to send share invitation:', e.message);
+    }
+}
+
+// Send notification when someone accepts your share
+async function sendShareAcceptedEmail(share, acceptorUsername, sharerEmail) {
+    if (!RESEND_API_KEY || !sharerEmail) {
+        console.log('📧 Skipping share accepted email (Resend not configured or no email)');
+        return;
+    }
+
+    try {
+        const emailHtml = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+                    <h1 style="color: white; margin: 0; font-size: 24px;">Share Accepted!</h1>
+                </div>
+                <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none;">
+                    <p style="color: #334155; font-size: 16px; margin: 0 0 20px 0;">
+                        Great news! <strong style="color: #10b981;">${acceptorUsername}</strong> accepted your shared video.
+                    </p>
+
+                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <p style="margin: 0; color: #1e293b;">${share.videoTitle}</p>
+                    </div>
+
+                    <p style="color: #94a3b8; font-size: 12px; margin: 20px 0 0 0; text-align: center;">
+                        ClipMark - Mark the moments that matter
+                    </p>
+                </div>
+            </div>
+        `;
+
+        const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${RESEND_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                from: EMAIL_FROM,
+                to: [sharerEmail],
+                subject: `${acceptorUsername} accepted your shared video`,
+                html: emailHtml,
+                text: `${acceptorUsername} accepted your shared video "${share.videoTitle}" on ClipMark!`
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || `HTTP ${response.status}`);
+        }
+
+        console.log(`📧 Share accepted notification sent to: ${sharerEmail}`);
+    } catch (e) {
+        console.error('📧 Failed to send share accepted email:', e.message);
+    }
+}
+
 // Static file serving configuration
 const STATIC_DIR = __dirname;
 const MIME_TYPES = {
@@ -125,11 +253,20 @@ const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
     : path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+const SHARES_FILE = path.join(DATA_DIR, 'shares.json');
+
+// Share token expiration: 30 days
+const SHARE_TOKEN_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Rate limiting for login attempts
 const loginAttempts = new Map(); // Map<ip_or_username, {count, lockedUntil}>
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+// Rate limiting for share creation
+const shareAttempts = new Map(); // Map<userId, {count, resetAt}>
+const MAX_SHARES_PER_HOUR = 10;
+const SHARE_RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
 
 // Session duration: 30 days
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -267,6 +404,109 @@ function deleteUserSessions(userId) {
         console.log(`🧹 Deleted ${deleted} sessions for user ${userId}`);
     }
     return deleted;
+}
+
+// =============================================
+// SHARING SYSTEM
+// =============================================
+
+// Read shares from file
+function readShares() {
+    try {
+        if (fs.existsSync(SHARES_FILE)) {
+            const data = fs.readFileSync(SHARES_FILE, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (e) {
+        console.error('Error reading shares:', e.message);
+    }
+    return {};
+}
+
+// Write shares to file
+function writeShares(shares) {
+    try {
+        ensureDataDirs();
+        fs.writeFileSync(SHARES_FILE, JSON.stringify(shares, null, 2));
+        return true;
+    } catch (e) {
+        console.error('Error writing shares:', e.message);
+        return false;
+    }
+}
+
+// Read user's "shared with me" file
+function readUserSharedWithMe(userId) {
+    try {
+        const filePath = path.join(getUserDataDir(userId), 'shared-with-me.json');
+        if (fs.existsSync(filePath)) {
+            const data = fs.readFileSync(filePath, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (e) {
+        console.error(`Error reading shared-with-me for user ${userId}:`, e.message);
+    }
+    return [];
+}
+
+// Write user's "shared with me" file
+function writeUserSharedWithMe(userId, sharedWithMe) {
+    try {
+        ensureUserDataDir(userId);
+        const filePath = path.join(getUserDataDir(userId), 'shared-with-me.json');
+        fs.writeFileSync(filePath, JSON.stringify(sharedWithMe, null, 2));
+        return true;
+    } catch (e) {
+        console.error(`Error writing shared-with-me for user ${userId}:`, e.message);
+        return false;
+    }
+}
+
+// Generate a share token
+function generateShareToken() {
+    return uuidv4() + '-' + uuidv4(); // Double UUID for extra security
+}
+
+// Clean expired shares (called periodically)
+function cleanExpiredShares() {
+    const shares = readShares();
+    const now = Date.now();
+    let cleaned = 0;
+
+    for (const [shareId, share] of Object.entries(shares)) {
+        // Only clean email shares with expired tokens
+        if (share.type === 'email' && share.status === 'pending' && share.tokenExpiresAt < now) {
+            delete shares[shareId];
+            cleaned++;
+        }
+    }
+
+    if (cleaned > 0) {
+        writeShares(shares);
+        console.log(`🧹 Cleaned ${cleaned} expired share tokens`);
+    }
+}
+
+// Check share rate limit for user
+function checkShareRateLimit(userId) {
+    const now = Date.now();
+    const attempt = shareAttempts.get(userId);
+
+    if (!attempt || now > attempt.resetAt) {
+        // Reset window
+        shareAttempts.set(userId, { count: 1, resetAt: now + SHARE_RATE_LIMIT_WINDOW });
+        return { allowed: true, remaining: MAX_SHARES_PER_HOUR - 1 };
+    }
+
+    if (attempt.count >= MAX_SHARES_PER_HOUR) {
+        const minutesRemaining = Math.ceil((attempt.resetAt - now) / 60000);
+        return { allowed: false, minutesRemaining };
+    }
+
+    // Increment count
+    attempt.count++;
+    shareAttempts.set(userId, attempt);
+    return { allowed: true, remaining: MAX_SHARES_PER_HOUR - attempt.count };
 }
 
 // Get user data directory
@@ -1122,12 +1362,14 @@ async function getTranscript(videoId) {
     }
 }
 
-// Clean expired sessions on startup
+// Clean expired sessions and shares on startup
 ensureDataDirs();
 cleanExpiredSessions();
+cleanExpiredShares();
 
-// Clean sessions periodically (every hour)
+// Clean sessions and shares periodically (every hour)
 setInterval(cleanExpiredSessions, 60 * 60 * 1000);
+setInterval(cleanExpiredShares, 60 * 60 * 1000);
 
 // Create the server
 const server = http.createServer(async (req, res) => {
@@ -1354,6 +1596,741 @@ const server = http.createServer(async (req, res) => {
         } else {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ valid: false }));
+        }
+        return;
+    }
+
+    // =============================================
+    // PROFILE ENDPOINTS (require authentication)
+    // =============================================
+
+    // Get current user's profile
+    if (url.pathname === '/api/profile' && req.method === 'GET') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        try {
+            const users = readUsers();
+            const user = users[userId];
+
+            if (!user) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'User not found' }));
+                return;
+            }
+
+            // Return profile data (create empty profile if doesn't exist)
+            const profile = user.profile || {
+                firstName: null,
+                lastName: null,
+                email: null,
+                interests: [],
+                updatedAt: null
+            };
+
+            console.log(`👤 GET /api/profile for user ${user.username}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                username: user.username,
+                createdAt: user.createdAt,
+                profile
+            }));
+        } catch (e) {
+            console.error('Error getting profile:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to get profile' }));
+        }
+        return;
+    }
+
+    // Update current user's profile
+    if (url.pathname === '/api/profile' && req.method === 'PUT') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { firstName, lastName, email, interests } = body || {};
+
+            // Validate email format if provided
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid email format' }));
+                return;
+            }
+
+            // Validate interests is an array if provided
+            if (interests !== undefined && !Array.isArray(interests)) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Interests must be an array' }));
+                return;
+            }
+
+            const users = readUsers();
+            const user = users[userId];
+
+            if (!user) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'User not found' }));
+                return;
+            }
+
+            // Update profile fields
+            user.profile = {
+                firstName: firstName !== undefined ? firstName : (user.profile?.firstName || null),
+                lastName: lastName !== undefined ? lastName : (user.profile?.lastName || null),
+                email: email !== undefined ? email : (user.profile?.email || null),
+                interests: interests !== undefined ? interests : (user.profile?.interests || []),
+                updatedAt: Date.now()
+            };
+
+            if (!writeUsers(users)) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to save profile' }));
+                return;
+            }
+
+            console.log(`👤 PUT /api/profile for user ${user.username}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                profile: user.profile
+            }));
+        } catch (e) {
+            console.error('Error updating profile:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to update profile' }));
+        }
+        return;
+    }
+
+    // =============================================
+    // SHARING ENDPOINTS (require authentication)
+    // =============================================
+
+    // Search users by username
+    if (url.pathname === '/api/users/search' && req.method === 'GET') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        const query = url.searchParams.get('q') || '';
+        if (query.length < 2) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Query must be at least 2 characters' }));
+            return;
+        }
+
+        try {
+            const users = readUsers();
+            const queryLower = query.toLowerCase();
+            const results = [];
+
+            for (const [uid, user] of Object.entries(users)) {
+                // Don't include current user or suspended users
+                if (uid === userId || user.suspended) continue;
+
+                if (user.username.toLowerCase().includes(queryLower)) {
+                    results.push({
+                        userId: uid,
+                        username: user.username
+                    });
+                }
+
+                // Limit to 10 results
+                if (results.length >= 10) break;
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(results));
+        } catch (e) {
+            console.error('Error searching users:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Search failed' }));
+        }
+        return;
+    }
+
+    // Create a new share
+    if (url.pathname === '/api/shares' && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        // Check rate limit
+        const rateLimit = checkShareRateLimit(userId);
+        if (!rateLimit.allowed) {
+            res.writeHead(429, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: `Rate limit exceeded. You can share up to ${MAX_SHARES_PER_HOUR} videos per hour. Try again in ${rateLimit.minutesRemaining} minutes.`
+            }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { type, targetUserId, targetEmail, videoId, youtubeVideoId, videoTitle, videoThumbnail, includeNotes, notes } = body || {};
+
+            // Validate type
+            if (type !== 'user' && type !== 'email') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid share type' }));
+                return;
+            }
+
+            // Validate target
+            if (type === 'user' && !targetUserId) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Target user ID required' }));
+                return;
+            }
+            if (type === 'email' && (!targetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail))) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Valid email required' }));
+                return;
+            }
+
+            // Can't share with yourself
+            if (type === 'user' && targetUserId === userId) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Cannot share with yourself' }));
+                return;
+            }
+
+            // Validate video data
+            if (!videoId || !youtubeVideoId || !videoTitle) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Video data required' }));
+                return;
+            }
+
+            const users = readUsers();
+            const ownerUser = users[userId];
+            if (!ownerUser) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'User not found' }));
+                return;
+            }
+
+            // For user shares, verify target exists
+            if (type === 'user') {
+                const targetUser = users[targetUserId];
+                if (!targetUser) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Target user not found' }));
+                    return;
+                }
+                if (targetUser.suspended) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Target user is suspended' }));
+                    return;
+                }
+            }
+
+            // Check for duplicate share
+            const shares = readShares();
+            const existingShare = Object.values(shares).find(s =>
+                s.ownerId === userId &&
+                s.youtubeVideoId === youtubeVideoId &&
+                ((type === 'user' && s.targetUserId === targetUserId) ||
+                 (type === 'email' && s.targetEmail === targetEmail)) &&
+                s.status !== 'declined'
+            );
+
+            if (existingShare) {
+                res.writeHead(409, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'You have already shared this video with this person' }));
+                return;
+            }
+
+            // Create share
+            const shareId = uuidv4();
+            const share = {
+                id: shareId,
+                type,
+                ownerId: userId,
+                ownerUsername: ownerUser.username,
+                videoId,
+                youtubeVideoId,
+                videoTitle,
+                videoThumbnail: videoThumbnail || `https://img.youtube.com/vi/${youtubeVideoId}/mqdefault.jpg`,
+                includeNotes: !!includeNotes,
+                notes: includeNotes ? (notes || []) : null,
+                targetUserId: type === 'user' ? targetUserId : null,
+                targetEmail: type === 'email' ? targetEmail : null,
+                status: 'pending',
+                shareToken: type === 'email' ? generateShareToken() : null,
+                tokenExpiresAt: type === 'email' ? Date.now() + SHARE_TOKEN_EXPIRY_MS : null,
+                createdAt: Date.now(),
+                acceptedAt: null
+            };
+
+            shares[shareId] = share;
+
+            if (!writeShares(shares)) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to create share' }));
+                return;
+            }
+
+            console.log(`📤 Share created: ${ownerUser.username} -> ${type === 'user' ? users[targetUserId].username : targetEmail} (${videoTitle})`);
+
+            // If email share, send the invitation email
+            if (type === 'email' && RESEND_API_KEY) {
+                sendShareInvitationEmail(share, ownerUser.username).catch(e => {
+                    console.error('Failed to send share invitation email:', e.message);
+                });
+            }
+
+            res.writeHead(201, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, shareId, share }));
+        } catch (e) {
+            console.error('Error creating share:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to create share' }));
+        }
+        return;
+    }
+
+    // Get outgoing shares (shares I created)
+    if (url.pathname === '/api/shares/outgoing' && req.method === 'GET') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        try {
+            const shares = readShares();
+            const users = readUsers();
+            const outgoing = Object.values(shares)
+                .filter(s => s.ownerId === userId)
+                .map(s => ({
+                    ...s,
+                    targetUsername: s.targetUserId ? users[s.targetUserId]?.username : null
+                }))
+                .sort((a, b) => b.createdAt - a.createdAt);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(outgoing));
+        } catch (e) {
+            console.error('Error getting outgoing shares:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to get shares' }));
+        }
+        return;
+    }
+
+    // Get incoming shares (pending shares for me)
+    if (url.pathname === '/api/shares/incoming' && req.method === 'GET') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        try {
+            const shares = readShares();
+            const incoming = Object.values(shares)
+                .filter(s => s.targetUserId === userId && s.status === 'pending')
+                .sort((a, b) => b.createdAt - a.createdAt);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(incoming));
+        } catch (e) {
+            console.error('Error getting incoming shares:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to get shares' }));
+        }
+        return;
+    }
+
+    // Get accepted shares (my shared-with-me library)
+    if (url.pathname === '/api/shares/library' && req.method === 'GET') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        try {
+            const sharedWithMe = readUserSharedWithMe(userId);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(sharedWithMe));
+        } catch (e) {
+            console.error('Error getting shared library:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to get library' }));
+        }
+        return;
+    }
+
+    // Accept a share
+    const acceptMatch = url.pathname.match(/^\/api\/shares\/([^\/]+)\/accept$/);
+    if (acceptMatch && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        const shareId = acceptMatch[1];
+
+        try {
+            const shares = readShares();
+            const share = shares[shareId];
+
+            if (!share) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Share not found' }));
+                return;
+            }
+
+            if (share.targetUserId !== userId) {
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'This share is not for you' }));
+                return;
+            }
+
+            if (share.status !== 'pending') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Share is not pending' }));
+                return;
+            }
+
+            // Update share status
+            share.status = 'accepted';
+            share.acceptedAt = Date.now();
+
+            // Add to user's shared-with-me list
+            const sharedWithMe = readUserSharedWithMe(userId);
+            const newVideoId = uuidv4(); // New ID for the shared video in recipient's library
+
+            sharedWithMe.push({
+                shareId: share.id,
+                fromUserId: share.ownerId,
+                fromUsername: share.ownerUsername,
+                videoId: newVideoId,
+                youtubeVideoId: share.youtubeVideoId,
+                videoTitle: share.videoTitle,
+                videoThumbnail: share.videoThumbnail,
+                includeNotes: share.includeNotes,
+                notes: share.notes,
+                sharedAt: share.createdAt,
+                acceptedAt: share.acceptedAt
+            });
+
+            if (!writeShares(shares) || !writeUserSharedWithMe(userId, sharedWithMe)) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to accept share' }));
+                return;
+            }
+
+            const users = readUsers();
+            console.log(`✅ Share accepted: ${users[userId]?.username} accepted share from ${share.ownerUsername}`);
+
+            // Send notification to sharer
+            if (RESEND_API_KEY) {
+                const sharerUser = users[share.ownerId];
+                if (sharerUser?.profile?.email) {
+                    sendShareAcceptedEmail(share, users[userId]?.username, sharerUser.profile.email).catch(e => {
+                        console.error('Failed to send share accepted email:', e.message);
+                    });
+                }
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, share }));
+        } catch (e) {
+            console.error('Error accepting share:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to accept share' }));
+        }
+        return;
+    }
+
+    // Decline a share
+    const declineMatch = url.pathname.match(/^\/api\/shares\/([^\/]+)\/decline$/);
+    if (declineMatch && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        const shareId = declineMatch[1];
+
+        try {
+            const shares = readShares();
+            const share = shares[shareId];
+
+            if (!share) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Share not found' }));
+                return;
+            }
+
+            if (share.targetUserId !== userId) {
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'This share is not for you' }));
+                return;
+            }
+
+            if (share.status !== 'pending') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Share is not pending' }));
+                return;
+            }
+
+            // Update share status
+            share.status = 'declined';
+
+            if (!writeShares(shares)) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to decline share' }));
+                return;
+            }
+
+            const users = readUsers();
+            console.log(`❌ Share declined: ${users[userId]?.username} declined share from ${share.ownerUsername}`);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true }));
+        } catch (e) {
+            console.error('Error declining share:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to decline share' }));
+        }
+        return;
+    }
+
+    // Revoke a share (owner only)
+    const revokeMatch = url.pathname.match(/^\/api\/shares\/([^\/]+)$/);
+    if (revokeMatch && req.method === 'DELETE') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        const shareId = revokeMatch[1];
+
+        try {
+            const shares = readShares();
+            const share = shares[shareId];
+
+            if (!share) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Share not found' }));
+                return;
+            }
+
+            if (share.ownerId !== userId) {
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Only the owner can revoke this share' }));
+                return;
+            }
+
+            delete shares[shareId];
+
+            if (!writeShares(shares)) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to revoke share' }));
+                return;
+            }
+
+            console.log(`🗑️ Share revoked by owner: ${share.videoTitle}`);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true }));
+        } catch (e) {
+            console.error('Error revoking share:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to revoke share' }));
+        }
+        return;
+    }
+
+    // =============================================
+    // PUBLIC SHARE ENDPOINTS (no authentication required)
+    // =============================================
+
+    // Get share preview by token (for email shares to non-users)
+    if (url.pathname === '/api/shares/preview' && req.method === 'GET') {
+        const token = url.searchParams.get('token');
+
+        if (!token) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Token required' }));
+            return;
+        }
+
+        try {
+            const shares = readShares();
+            const share = Object.values(shares).find(s => s.shareToken === token);
+
+            if (!share) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Share not found or has been revoked' }));
+                return;
+            }
+
+            if (share.status !== 'pending') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'This share has already been claimed' }));
+                return;
+            }
+
+            if (share.tokenExpiresAt && share.tokenExpiresAt < Date.now()) {
+                res.writeHead(410, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'This share link has expired' }));
+                return;
+            }
+
+            // Return preview data (without sensitive info)
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                valid: true,
+                ownerUsername: share.ownerUsername,
+                videoTitle: share.videoTitle,
+                videoThumbnail: share.videoThumbnail,
+                youtubeVideoId: share.youtubeVideoId,
+                includeNotes: share.includeNotes,
+                noteCount: share.notes?.length || 0,
+                createdAt: share.createdAt
+            }));
+        } catch (e) {
+            console.error('Error getting share preview:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to get share preview' }));
+        }
+        return;
+    }
+
+    // Claim share by token (after signup/login)
+    if (url.pathname === '/api/shares/claim' && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required. Please login or signup first.' }));
+            return;
+        }
+
+        const token = url.searchParams.get('token');
+
+        if (!token) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Token required' }));
+            return;
+        }
+
+        try {
+            const shares = readShares();
+            const share = Object.values(shares).find(s => s.shareToken === token);
+
+            if (!share) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Share not found or has been revoked' }));
+                return;
+            }
+
+            if (share.ownerId === userId) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'You cannot claim your own share' }));
+                return;
+            }
+
+            if (share.status !== 'pending') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'This share has already been claimed' }));
+                return;
+            }
+
+            if (share.tokenExpiresAt && share.tokenExpiresAt < Date.now()) {
+                res.writeHead(410, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'This share link has expired' }));
+                return;
+            }
+
+            // Update share status
+            share.status = 'accepted';
+            share.acceptedAt = Date.now();
+            share.targetUserId = userId; // Update target to claiming user
+
+            // Add to user's shared-with-me list
+            const sharedWithMe = readUserSharedWithMe(userId);
+            const newVideoId = uuidv4();
+
+            sharedWithMe.push({
+                shareId: share.id,
+                fromUserId: share.ownerId,
+                fromUsername: share.ownerUsername,
+                videoId: newVideoId,
+                youtubeVideoId: share.youtubeVideoId,
+                videoTitle: share.videoTitle,
+                videoThumbnail: share.videoThumbnail,
+                includeNotes: share.includeNotes,
+                notes: share.notes,
+                sharedAt: share.createdAt,
+                acceptedAt: share.acceptedAt
+            });
+
+            if (!writeShares(shares) || !writeUserSharedWithMe(userId, sharedWithMe)) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to claim share' }));
+                return;
+            }
+
+            const users = readUsers();
+            console.log(`✅ Email share claimed: ${users[userId]?.username} claimed share from ${share.ownerUsername}`);
+
+            // Send notification to sharer
+            if (RESEND_API_KEY) {
+                const sharerUser = users[share.ownerId];
+                if (sharerUser?.profile?.email) {
+                    sendShareAcceptedEmail(share, users[userId]?.username, sharerUser.profile.email).catch(e => {
+                        console.error('Failed to send share accepted email:', e.message);
+                    });
+                }
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, share }));
+        } catch (e) {
+            console.error('Error claiming share:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to claim share' }));
         }
         return;
     }

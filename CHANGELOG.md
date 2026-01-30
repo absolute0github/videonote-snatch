@@ -29,6 +29,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **User Profiles**: Edit profile with first name, last name, email, and interests
+  - New ProfileModal accessible from SettingsModal
+  - YouTube category interests plus custom interest support
+  - GET/PUT `/api/profile` endpoints
+- **Video Sharing (User-to-User)**: Share videos with other ClipMark users
+  - ShareModal with user search and autocomplete
+  - Option to include notes as snapshot copies
+  - Accept/decline workflow for recipients
+  - PendingSharesDropdown notification in header
+  - "Shared with me" tab in sidebar for accepted shares
+- **Video Sharing (Email)**: Share videos via email invitation to non-users
+  - Branded email invitation sent via Resend API
+  - Share landing page with video preview
+  - Auto-claim share after signup/login with token
+  - 30-day token expiration
+- **Share Rate Limiting**: Maximum 10 shares per hour per user
+- **Sharing API Endpoints**:
+  - `/api/users/search` - Search users by username
+  - `/api/shares` - Create, list, accept, decline, revoke shares
+  - `/api/shares/preview` - Public share preview for email links
+  - `/api/shares/claim` - Claim email share after authentication
+- **Data Storage**:
+  - `data/shares.json` - Central share records
+  - `data/users/{userId}/shared-with-me.json` - Per-user accepted shares
+
+### Changed
+- VideoCard now includes share button on hover
+- SettingsModal now has "Edit Profile" link
+- AuthModal supports embedded mode for share landing pages
+
+### Files Modified
+- `transcript-server.js` - Added profile and sharing endpoints (~600 lines)
+- `app.html` - Added ProfileModal, ShareModal, PendingSharesDropdown components (~400 lines)
+- `CLAUDE.md` - Updated documentation
+
+---
+
 - **AI Note Enhancement**: Batch-process all notes for a video using Gemini AI to summarize and expand notes with transcript context
   - "Enhance Notes" button in toolbar below video player
   - Progress indicator during enhancement processing

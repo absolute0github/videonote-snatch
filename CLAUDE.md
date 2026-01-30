@@ -22,6 +22,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Markdown Export**: Download notes as formatted .md files
 - YouTube API integration for metadata
 - Data persistence via localStorage and optional server backend
+- **User Profiles**: Edit profile with first name, last name, email, and interests
+- **Video Sharing**: Share videos with other ClipMark users or via email invitation
+- **Shared Library**: View videos shared with you in a dedicated "Shared with me" tab
 
 ## Architecture
 
@@ -54,17 +57,37 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
    }
 
    Category: { id, name, color }
+
+   // User profile (stored in data/users.json)
+   User: {
+     userId, username, passwordHash, createdAt, suspended,
+     profile: { firstName, lastName, email, interests: [], updatedAt }
+   }
+
+   // Share record (stored in data/shares.json)
+   Share: {
+     id, type: 'user'|'email', ownerId, ownerUsername,
+     videoId, youtubeVideoId, videoTitle, videoThumbnail,
+     includeNotes, notes: [Note]|null,
+     targetUserId|null, targetEmail|null,
+     status: 'pending'|'accepted'|'declined'|'expired',
+     shareToken|null, tokenExpiresAt|null,
+     createdAt, acceptedAt|null
+   }
    ```
 
 ### Component Hierarchy
 
 - **App** (main container)
   - YouTubePlayer (embedded iframe)
-  - VideoCard (in sidebar list)
+  - VideoCard (in sidebar list, with share button)
   - NoteItem (timestamped note with bullet point rendering)
   - AddVideoModal / EditVideoModal
   - CategoryModal
-  - SettingsModal
+  - SettingsModal (with link to ProfileModal)
+  - ProfileModal (edit user profile: name, email, interests)
+  - ShareModal (share video with user or via email)
+  - PendingSharesDropdown (notification bell for incoming shares)
   - EnhancementReviewModal (for reviewing ambiguous AI suggestions)
 
 ### Data Loading on Refresh
@@ -83,6 +106,22 @@ When the app loads:
   - Runs on port 3456
   - Accessible via `/transcript?v={videoId}` endpoint
   - Returns parsed transcript segments with timestamps
+
+### Sharing API Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/profile` | Get current user's profile |
+| PUT | `/api/profile` | Update profile fields |
+| GET | `/api/users/search?q={query}` | Search users by username |
+| POST | `/api/shares` | Create share (rate limited: 10/hour) |
+| GET | `/api/shares/outgoing` | Shares created by user |
+| GET | `/api/shares/incoming` | Pending shares for user |
+| GET | `/api/shares/library` | Accepted shares (shared-with-me) |
+| POST | `/api/shares/{id}/accept` | Accept pending share |
+| POST | `/api/shares/{id}/decline` | Decline pending share |
+| DELETE | `/api/shares/{id}` | Revoke share (owner only) |
+| GET | `/api/shares/preview?token={token}` | Public - get email share preview |
+| POST | `/api/shares/claim?token={token}` | Claim email share after signup |
 
 - Expected backend at `http://localhost:3000` for bookmark sync (not included in repo)
 
