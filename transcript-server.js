@@ -367,14 +367,21 @@ function createSession(userId) {
 
 // Validate session token and return userId
 function validateSession(token) {
-    if (!token) return null;
+    if (!token) {
+        console.log('🔐 validateSession: No token provided');
+        return null;
+    }
 
     const sessions = readSessions();
     const session = sessions[token];
 
-    if (!session) return null;
+    if (!session) {
+        console.log(`🔐 validateSession: Token not found in sessions (${Object.keys(sessions).length} total sessions)`);
+        return null;
+    }
     if (session.expiresAt < Date.now()) {
         // Clean up expired session
+        console.log(`🔐 validateSession: Session expired for user ${session.userId}`);
         delete sessions[token];
         writeSessions(sessions);
         return null;
@@ -1782,6 +1789,8 @@ const server = http.createServer(async (req, res) => {
         const userId = authenticateRequest(req);
 
         if (!userId) {
+            const token = extractAuthToken(req);
+            console.log(`❌ Share creation failed - auth failed. Token present: ${!!token}, Token prefix: ${token ? token.substring(0, 8) + '...' : 'none'}`);
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Authentication required' }));
             return;
