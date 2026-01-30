@@ -1,8 +1,30 @@
 # Changelog
 
-All notable changes to the YouTube Bookmarking App will be documented in this file.
+All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [2.0.0] - 2025-01-29
+
+### Changed (Rebranding)
+- **Renamed app** from "VideoNoteSnatch" to "ClipMark"
+- **New tagline**: "Mark the moments that matter"
+- **New color scheme**: Emerald (#10b981) primary with gold (#fbbf24) accents (previously red)
+- **New logo**: 5 options created in `/logos/` directory (ClipMark selected)
+- **Split architecture**: Landing page (`index.html`) separated from main app (`app.html`)
+
+### Added
+- **Email signup notifications**: Admin receives email when new users register
+  - Uses Resend API (SMTP blocked on Railway)
+  - Branded HTML email template
+  - Environment variables: `RESEND_API_KEY`, `ADMIN_EMAIL`, `EMAIL_FROM`
+- **Logo assets**: SVG logos and favicons for 5 brand options
+- **Logo preview page**: `/logos/preview.html` for comparing logo options
+
+### Fixed
+- Server routing updated to serve `app.html` for `/app` and `/admin` routes
+
+---
 
 ## [Unreleased]
 

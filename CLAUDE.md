@@ -152,3 +152,31 @@ Videos save with debouncing (500ms) to avoid excessive server requests when mult
 3. **YouTube API Quotas**: Video metadata fetching uses YouTube API quota; batching or caching recommended for many videos.
 4. **Transcript Server**: Requires external access to YouTube; may fail in restricted networks.
 
+## Documentation Requirements
+
+**IMPORTANT**: After completing any feature, bug fix, or significant change, automatically:
+
+1. **Update CHANGELOG.md** with:
+   - Date and brief description of changes
+   - Files modified
+   - Any new environment variables or dependencies added
+
+2. **Update this CLAUDE.md** if:
+   - New features are added (add to Key Features list)
+   - Architecture changes (update Architecture section)
+   - New environment variables or API integrations added
+   - New known issues discovered
+
+3. **Commit messages** should be descriptive and follow the format:
+   ```
+   Short summary of change
+
+   - Bullet points with details
+   - Files affected
+   - Any breaking changes noted
+
+   Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+   ```
+
+Do NOT ask before documenting - just do it automatically as part of completing the work.
+
