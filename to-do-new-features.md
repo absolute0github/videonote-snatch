@@ -9,10 +9,27 @@
 5. Make the Get Context button the same size as Add note button.
 6. Remove AI Find tips button and functionality.
 
-Need to be able to share video and notes with other users.
+~~Need to be able to share video and notes with other users.~~ ✅ Implemented
 
-I want to be notified via email each time someone signs up.
+~~I want to be notified via email each time someone signs up.~~ ✅ Implemented
 
 To monetize, what do recommend as as far as system limitations for a "free version" and different pricing tiers?
 
 Can I also assign friends/testers with a paid version
+
+---
+
+## Future Monetization Plans
+
+### Premium Features (to gate behind paid tier)
+- **Video Sharing** - Currently free, should become premium-only
+  - User-to-user sharing
+  - Email sharing with invite links
+  - "Shared with me" library access
+
+### Implementation Notes
+When implementing premium tiers:
+1. Add `isPremium` or `subscriptionTier` field to user data
+2. Check subscription status before allowing share creation
+3. Consider grandfathering existing shares
+4. Free tier could allow limited shares (e.g., 3 total) as a teaser
