@@ -29,6 +29,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Library View Modes**: Toggle between grid and list views in the video library
+  - Grid/list toggle buttons in library header
+  - New `VideoListItem` component for compact list view
+  - List view shows thumbnail, title, tags, publish date, view count, and notes count
+  - State persisted in `libraryViewMode`
+- **Video View Count**: Track how many times each video has been opened
+  - View count displayed on video thumbnails (grid view: bottom-left, list view: inline)
+  - Eye icon indicator for view count
+  - `handleSelectVideo` function increments count and opens video
+  - `viewCount` field added to Video data structure
 - **User Profiles**: Edit profile with first name, last name, email, and interests
   - New ProfileModal accessible from SettingsModal
   - YouTube category interests plus custom interest support
@@ -89,8 +99,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Files Modified
 - `transcript-server.js` - Added profile and sharing endpoints (~600 lines)
-- `app.html` - Added ProfileModal, ShareModal, PendingSharesDropdown components (~400 lines)
-- `CLAUDE.md` - Updated documentation
+- `app.html` - Added ProfileModal, ShareModal, PendingSharesDropdown, VideoListItem components; library view toggle; view count tracking (~500 lines)
+- `CLAUDE.md` - Updated documentation with new features and components
 
 ---
 

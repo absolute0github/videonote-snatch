@@ -25,6 +25,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **User Profiles**: Edit profile with first name, last name, email, and interests
 - **Video Sharing**: Share videos with other ClipMark users or via email invitation
 - **Shared Library**: View videos shared with you in a dedicated "Shared with me" tab
+- **Library View Modes**: Toggle between grid and list views in the library
+- **Video View Count**: Track how many times each video has been opened
 
 ## Architecture
 
@@ -49,7 +51,7 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
    ```javascript
    Video: {
      id, videoId, title, category, tags, notes: [Note],
-     publishDate, thumbnail, description
+     publishDate, thumbnail, description, viewCount
    }
 
    Note: {
@@ -80,7 +82,8 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
 
 - **App** (main container)
   - YouTubePlayer (embedded iframe)
-  - VideoCard (in sidebar list, with share button)
+  - VideoCard (grid view thumbnail with view count and notes count)
+  - VideoListItem (list view row with metadata)
   - NoteItem (timestamped note with bullet point rendering)
   - AddVideoModal / EditVideoModal
   - CategoryModal
