@@ -217,7 +217,7 @@ Videos save with debouncing (500ms) to avoid excessive server requests when mult
    - Files affected
    - Any breaking changes noted
 
-   Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+   Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
    ```
 
 Do NOT ask before documenting - just do it automatically as part of completing the work.
