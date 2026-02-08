@@ -4,6 +4,29 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Docs] - 2026-02-08
+
+### Fixed
+- **CLAUDE.md accuracy overhaul**: Corrected multiple outdated/inaccurate sections
+  - Clarified that `transcript-server.js` is the unified backend (not a separate transcript-only server)
+  - Documented authentication flow (Bearer tokens, bcryptjs, rate limiting, session management)
+  - Added auth endpoints table (`/auth/register`, `/auth/login`, `/auth/logout`, `/auth/check`)
+  - Added other endpoints table (`/bookmarks`, `/categories`, `/api/youtube/video`, `/api/gemini`, etc.)
+  - Fixed server URL: port 3456 with auto-detection, not `http://localhost:3000`
+  - Documented `viewCount` tracking mechanism (client-side increment, synced to server)
+  - Documented watch time tracking (separate from view count, syncs every 30s)
+  - Added `ytBookmarks_authToken` to localStorage keys
+  - Expanded `index.html` description (share token redirects, CTA links to `/app`)
+  - Added note about no automated tests and `/test` transcript testing UI
+  - Updated dev commands to reflect that `transcript-server.js` serves the full app
+  - Updated Co-Authored-By to Claude Opus 4.6
+
+### Files Modified
+- `CLAUDE.md`
+- `CHANGELOG.md`
+
+---
+
 ## [2.0.0] - 2025-01-29
 
 ### Changed (Rebranding)

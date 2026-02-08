@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-The app is a **single HTML file** (`app.html`) with React components embedded using JSX compiled by Babel. There is no build process—it runs directly in the browser. A separate landing page (`index.html`) provides marketing content.
+The app is a **single HTML file** (`app.html`) with React components embedded using JSX compiled by Babel. There is no build process—it runs directly in the browser. A separate landing page (`index.html`) provides marketing content with feature descriptions and CTAs linking to `/app`. It also handles share token redirects (`?share_token=...` → `/app?share_token=...`).
 
 ### Data Flow
 
@@ -43,9 +43,10 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
    - `pendingEnhancements`, `showEnhancementReview`: Handle ambiguous AI results
 
 2. **Persistence Layers** (in priority order):
-   - **Server**: Optional backend at `SERVER_URL` (defaults to `http://localhost:3000`)
+   - **Server**: Backend at `transcript-server.js` (port 3456, or same origin when behind nginx)
    - **localStorage**: Fallback and backup for videos, categories, and API keys
    - Both are attempted; localStorage is always used for API keys (device-specific)
+   - Server URL is auto-detected: same origin on port 80, otherwise `http://{hostname}:3456`
 
 3. **Key Data Structures**:
    ```javascript
@@ -103,12 +104,31 @@ When the app loads:
 
 **Important**: Notes are stored as nested arrays within video objects, not separately. When a video is deleted, all its notes are deleted.
 
-## Backend (Optional)
+## Backend
 
-- **transcript-server.js**: Node.js server that fetches YouTube transcripts
-  - Runs on port 3456
-  - Accessible via `/transcript?v={videoId}` endpoint
-  - Returns parsed transcript segments with timestamps
+**`transcript-server.js`** is the unified Node.js backend handling all server functionality: authentication, bookmarks, transcripts, sharing, and API proxying. It runs on port 3456 (configurable via `PORT` env var).
+
+**Data storage**: JSON files in `data/` directory:
+- `data/users.json` — User accounts, profiles, and watch time
+- `data/sessions.json` — Active session tokens
+- `data/shares.json` — Share records
+
+### Authentication
+
+- **Bearer token auth**: UUID tokens stored in `data/sessions.json`, 30-day expiry
+- **Password hashing**: bcryptjs with 10 salt rounds
+- **Rate limiting**: 5 failed login attempts = 15-minute lockout per IP/username
+- **Account suspension**: Users can be marked `suspended: true` in users.json
+- **Frontend storage**: Token stored in localStorage as `ytBookmarks_authToken`
+- **Session restore**: On app load, calls `/auth/check` to validate stored token
+
+### Auth Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/register` | Create account (validates username 3-30 chars, password 6+) |
+| POST | `/auth/login` | Login (rate limited) |
+| POST | `/auth/logout` | Logout (deletes session) |
+| GET | `/auth/check` | Verify token validity, returns user profile if valid |
 
 ### Sharing API Endpoints
 | Method | Endpoint | Description |
@@ -126,21 +146,35 @@ When the app loads:
 | GET | `/api/shares/preview?token={token}` | Public - get email share preview |
 | POST | `/api/shares/claim?token={token}` | Claim email share after signup |
 
-- Expected backend at `http://localhost:3000` for bookmark sync (not included in repo)
+### Other Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/transcript?v={videoId}` | Fetch YouTube transcript (no auth) |
+| GET/POST/PUT | `/bookmarks` | Sync video bookmarks (auth required) |
+| GET/POST/PUT | `/categories` | Sync categories (auth required) |
+| GET | `/api/youtube/video` | Proxy YouTube metadata fetch |
+| POST | `/api/gemini` | Proxy Gemini AI requests |
+| POST | `/api/admin/watch-time` | Track video watch time |
+| GET | `/api/status` | Server health check |
+| GET | `/` | Serves `index.html` (landing page) |
+| GET | `/app` | Serves `app.html` (main app) |
 
 ## Common Development Commands
 
 ```bash
-# Install dependencies (for transcript server only)
+# Install dependencies
 npm install
 
-# Run transcript server (in background)
+# Run the server (handles everything: app serving, auth, transcripts, sharing)
 node transcript-server.js
+# Then visit http://localhost:3456
 
-# Run HTTP server for the app (using Python, for example)
+# Or for local dev without backend, serve static files directly:
 python3 -m http.server 8000
-# Then visit http://localhost:8000
+# Then visit http://localhost:8000 (no auth/sharing/transcript features)
 ```
+
+**Note**: There are no automated tests. Testing is manual. A transcript testing UI is available at `/test` when the server is running.
 
 ## Key Implementation Details
 
@@ -149,6 +183,7 @@ python3 -m http.server 8000
 - `ytBookmarks_categories`: User categories
 - `ytBookmarks_geminiApiKey`: Device-local Gemini API key
 - `ytBookmarks_youtubeApiKey`: Device-local YouTube API key
+- `ytBookmarks_authToken`: Session bearer token for server auth
 
 ### Note Generation
 The app supports three note types:
@@ -176,6 +211,9 @@ The "Download .md" button exports notes as a formatted Markdown file including:
 - **Gemini API**: Optional, for video summary generation
 - **YouTube API**: Optional, for fetching video metadata (publish date, description, thumbnail)
 - **noembed.com**: Fallback for upload date when YouTube API key unavailable
+
+### Video View Count
+The `viewCount` field on each video is incremented client-side via `incrementViewCount(videoId)` each time a video is selected for playback. It persists to both localStorage and the server (via `/bookmarks` sync). Displayed as an eye icon in grid view and "X views" text in list view. Separate from **watch time tracking**, which accumulates seconds watched and syncs to the server every 30 seconds via `POST /api/admin/watch-time`.
 
 ### Debounced Saving
 Videos save with debouncing (500ms) to avoid excessive server requests when multiple notes are added/edited rapidly.
