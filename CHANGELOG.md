@@ -51,6 +51,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **YouTube Live URL support**: Added support for `youtube.com/live/VIDEO_ID` URLs (used for past live streams)
+  - Updated `extractVideoId()` in `app.html` to recognize live video URL format
+  - Updated test page in `transcript-server.js` with same fix
+
 ### Added
 - **Library View Modes**: Toggle between grid and list views in the video library
   - Grid/list toggle buttons in library header

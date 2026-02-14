@@ -2922,8 +2922,8 @@ const server = http.createServer(async (req, res) => {
 
     <script>
         function extractVideoId(input) {
-            // Handle full URLs
-            const urlMatch = input.match(/(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/|youtube\\.com\\/embed\\/)([a-zA-Z0-9_-]{11})/);
+            // Handle full URLs (including live videos)
+            const urlMatch = input.match(/(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/|youtube\\.com\\/embed\\/|youtube\\.com\\/live\\/)([a-zA-Z0-9_-]{11})/);
             if (urlMatch) return urlMatch[1];
             // Handle plain video ID
             if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
