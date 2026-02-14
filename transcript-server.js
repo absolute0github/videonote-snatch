@@ -273,6 +273,195 @@ const shareAttempts = new Map(); // Map<userId, {count, resetAt}>
 const MAX_SHARES_PER_HOUR = 10;
 const SHARE_RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
 
+// Rate limiting for AI transcription generation
+const transcriptionAttempts = new Map(); // Map<userId, {count, resetAt}>
+const MAX_TRANSCRIPTIONS_PER_HOUR = 5;
+const TRANSCRIPTION_RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
+
+// =============================================
+// SRT/VTT TRANSCRIPT PARSING
+// =============================================
+
+// Parse SRT format to transcript segments
+// SRT format:
+// 1
+// 00:00:00,000 --> 00:00:02,500
+// First subtitle text
+//
+// 2
+// 00:00:02,500 --> 00:00:05,000
+// Second subtitle text
+function parseSRT(content) {
+    const segments = [];
+    const blocks = content.trim().split(/\n\n+/);
+
+    for (const block of blocks) {
+        const lines = block.trim().split('\n');
+        if (lines.length < 3) continue;
+
+        // Skip the sequence number (first line)
+        const timeLine = lines[1];
+        const textLines = lines.slice(2);
+
+        // Parse timestamp line: 00:00:00,000 --> 00:00:02,500
+        const timeMatch = timeLine.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
+        if (!timeMatch) continue;
+
+        const startSeconds = parseInt(timeMatch[1]) * 3600 +
+                            parseInt(timeMatch[2]) * 60 +
+                            parseInt(timeMatch[3]) +
+                            parseInt(timeMatch[4]) / 1000;
+
+        const endSeconds = parseInt(timeMatch[5]) * 3600 +
+                          parseInt(timeMatch[6]) * 60 +
+                          parseInt(timeMatch[7]) +
+                          parseInt(timeMatch[8]) / 1000;
+
+        const text = textLines.join(' ').replace(/<[^>]+>/g, '').trim();
+        if (text) {
+            segments.push({
+                start: startSeconds,
+                duration: endSeconds - startSeconds,
+                text
+            });
+        }
+    }
+
+    return segments;
+}
+
+// Parse VTT (WebVTT) format to transcript segments
+// VTT format:
+// WEBVTT
+//
+// 00:00:00.000 --> 00:00:02.500
+// First subtitle text
+//
+// 00:00:02.500 --> 00:00:05.000
+// Second subtitle text
+function parseVTT(content) {
+    const segments = [];
+
+    // Remove WEBVTT header and any metadata
+    let vttContent = content.replace(/^WEBVTT[^\n]*\n/, '');
+    vttContent = vttContent.replace(/^NOTE[^\n]*\n/gm, '');
+    vttContent = vttContent.replace(/^STYLE[^\n]*\n(?:.*\n)*?\n/gm, '');
+
+    const blocks = vttContent.trim().split(/\n\n+/);
+
+    for (const block of blocks) {
+        const lines = block.trim().split('\n');
+        if (lines.length < 2) continue;
+
+        // Find the timestamp line (might have a cue identifier before it)
+        let timeLineIndex = 0;
+        let timeLine = lines[0];
+
+        // If first line doesn't contain -->, it's a cue identifier
+        if (!timeLine.includes('-->') && lines.length > 1) {
+            timeLineIndex = 1;
+            timeLine = lines[1];
+        }
+
+        const textLines = lines.slice(timeLineIndex + 1);
+
+        // Parse timestamp line: 00:00:00.000 --> 00:00:02.500 or 00:00.000 --> 00:02.500
+        let timeMatch = timeLine.match(/(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[.,](\d{3})/);
+        if (!timeMatch) {
+            // Try shorter format: 00:00.000 --> 00:02.500
+            timeMatch = timeLine.match(/(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2})[.,](\d{3})/);
+            if (timeMatch) {
+                const startSeconds = parseInt(timeMatch[1]) * 60 +
+                                    parseInt(timeMatch[2]) +
+                                    parseInt(timeMatch[3]) / 1000;
+                const endSeconds = parseInt(timeMatch[4]) * 60 +
+                                  parseInt(timeMatch[5]) +
+                                  parseInt(timeMatch[6]) / 1000;
+
+                const text = textLines.join(' ').replace(/<[^>]+>/g, '').trim();
+                if (text) {
+                    segments.push({
+                        start: startSeconds,
+                        duration: endSeconds - startSeconds,
+                        text
+                    });
+                }
+                continue;
+            }
+            continue;
+        }
+
+        const startSeconds = parseInt(timeMatch[1]) * 3600 +
+                            parseInt(timeMatch[2]) * 60 +
+                            parseInt(timeMatch[3]) +
+                            parseInt(timeMatch[4]) / 1000;
+
+        const endSeconds = parseInt(timeMatch[5]) * 3600 +
+                          parseInt(timeMatch[6]) * 60 +
+                          parseInt(timeMatch[7]) +
+                          parseInt(timeMatch[8]) / 1000;
+
+        const text = textLines.join(' ').replace(/<[^>]+>/g, '').trim();
+        if (text) {
+            segments.push({
+                start: startSeconds,
+                duration: endSeconds - startSeconds,
+                text
+            });
+        }
+    }
+
+    return segments;
+}
+
+// Detect format and parse accordingly
+function parseSubtitleFile(content, filename) {
+    const ext = filename.toLowerCase().split('.').pop();
+
+    if (ext === 'srt') {
+        return { segments: parseSRT(content), source: 'srt' };
+    } else if (ext === 'vtt') {
+        return { segments: parseVTT(content), source: 'vtt' };
+    } else if (content.trim().startsWith('WEBVTT')) {
+        return { segments: parseVTT(content), source: 'vtt' };
+    } else {
+        // Default to SRT format
+        return { segments: parseSRT(content), source: 'srt' };
+    }
+}
+
+// Check transcription rate limit
+function checkTranscriptionRateLimit(userId) {
+    const now = Date.now();
+    const record = transcriptionAttempts.get(userId);
+
+    if (!record || now > record.resetAt) {
+        return { allowed: true, remaining: MAX_TRANSCRIPTIONS_PER_HOUR };
+    }
+
+    if (record.count >= MAX_TRANSCRIPTIONS_PER_HOUR) {
+        const waitTime = Math.ceil((record.resetAt - now) / 60000);
+        return { allowed: false, remaining: 0, waitMinutes: waitTime };
+    }
+
+    return { allowed: true, remaining: MAX_TRANSCRIPTIONS_PER_HOUR - record.count };
+}
+
+// Record transcription attempt
+function recordTranscriptionAttempt(userId) {
+    const now = Date.now();
+    const record = transcriptionAttempts.get(userId);
+
+    if (!record || now > record.resetAt) {
+        transcriptionAttempts.set(userId, {
+            count: 1,
+            resetAt: now + TRANSCRIPTION_RATE_LIMIT_WINDOW
+        });
+    } else {
+        record.count++;
+    }
+}
+
 // Session duration: 30 days
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -2754,6 +2943,184 @@ const server = http.createServer(async (req, res) => {
             console.error('YouTube proxy error:', e.message);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'YouTube API request failed' }));
+        }
+        return;
+    }
+
+    // =============================================
+    // TRANSCRIPT ENDPOINTS
+    // =============================================
+
+    // Upload transcript file (SRT/VTT) - requires authentication
+    if (url.pathname === '/api/transcript/upload' && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { content, filename, videoId } = body || {};
+
+            if (!content) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Transcript content is required' }));
+                return;
+            }
+
+            if (!filename && !content.trim().startsWith('WEBVTT')) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Filename is required to determine format (or content must start with WEBVTT)' }));
+                return;
+            }
+
+            // Parse the subtitle file
+            const result = parseSubtitleFile(content, filename || 'subtitle.vtt');
+
+            if (!result.segments || result.segments.length === 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Could not parse any transcript segments from file' }));
+                return;
+            }
+
+            console.log(`📝 Parsed ${result.segments.length} segments from ${result.source.toUpperCase()} file for user ${userId}`);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                transcript: {
+                    segments: result.segments,
+                    source: result.source
+                },
+                segmentCount: result.segments.length
+            }));
+        } catch (e) {
+            console.error('Transcript upload error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to parse transcript file' }));
+        }
+        return;
+    }
+
+    // Generate AI transcription - requires authentication and Gemini API
+    if (url.pathname === '/api/transcript/generate' && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        if (!GEMINI_API_KEY) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Gemini API not configured on server' }));
+            return;
+        }
+
+        // Check rate limit
+        const rateLimit = checkTranscriptionRateLimit(userId);
+        if (!rateLimit.allowed) {
+            res.writeHead(429, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: `Rate limit exceeded. You can generate ${MAX_TRANSCRIPTIONS_PER_HOUR} transcriptions per hour.`,
+                waitMinutes: rateLimit.waitMinutes
+            }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { videoUrl, videoTitle, sourceType } = body || {};
+
+            if (!videoUrl) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Video URL is required' }));
+                return;
+            }
+
+            // Note: For non-YouTube sources, we can't actually transcribe the audio
+            // Gemini would need the actual audio/video file to transcribe
+            // This is a placeholder that creates a basic timestamp guide based on video duration
+            // In a real implementation, you would need to:
+            // 1. Download the video
+            // 2. Extract audio
+            // 3. Send to a speech-to-text service
+
+            // For now, we return a helpful message
+            const prompt = `You are helping create a transcript placeholder for a video.
+The video is titled: "${videoTitle || 'Untitled Video'}"
+Video source type: ${sourceType || 'unknown'}
+Video URL: ${videoUrl}
+
+Since we cannot directly access the video content, please generate a helpful response explaining that:
+1. Automatic transcription for non-YouTube videos requires the actual video file
+2. The user can upload an SRT or VTT file manually
+3. If this is a Loom or Wistia video, the platform might provide their own transcript
+
+Format your response as JSON with a "message" field explaining this, and include a "canTranscribe" boolean set to false.`;
+
+            // Call Gemini API
+            const geminiResponse = await fetchUrl(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
+                    })
+                }
+            );
+
+            // Record the attempt
+            recordTranscriptionAttempt(userId);
+
+            if (geminiResponse.status !== 200) {
+                console.error('Gemini API error:', geminiResponse.data);
+                res.writeHead(geminiResponse.status, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'AI transcription service error' }));
+                return;
+            }
+
+            const geminiData = JSON.parse(geminiResponse.data);
+            const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+            // Try to parse as JSON, otherwise return raw message
+            let responseObj;
+            try {
+                // Extract JSON from potential markdown code block
+                let jsonStr = responseText;
+                const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+                if (jsonMatch) {
+                    jsonStr = jsonMatch[1];
+                }
+                responseObj = JSON.parse(jsonStr.trim());
+            } catch (e) {
+                responseObj = {
+                    canTranscribe: false,
+                    message: 'Automatic transcription is not available for this video type. Please upload an SRT or VTT file manually.'
+                };
+            }
+
+            console.log(`🎙️ AI transcription request for ${sourceType} video by user ${userId} (${rateLimit.remaining - 1} remaining)`);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                ...responseObj,
+                rateLimit: {
+                    remaining: rateLimit.remaining - 1,
+                    limit: MAX_TRANSCRIPTIONS_PER_HOUR
+                }
+            }));
+        } catch (e) {
+            console.error('AI transcription error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'AI transcription request failed' }));
         }
         return;
     }

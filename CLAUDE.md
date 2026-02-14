@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ClipMark** ("Mark the moments that matter") is a single-page React application for saving, organizing, and annotating YouTube videos. Users can bookmark videos, create notes at specific timestamps, organize bookmarks into categories, and optionally fetch video metadata and AI-generated summaries.
+**ClipMark** ("Mark the moments that matter") is a single-page React application for saving, organizing, and annotating videos from multiple platforms. Users can bookmark videos from YouTube, Vimeo, Loom, Wistia, Google Drive, or direct URLs (.mp4, .webm), create notes at specific timestamps, organize bookmarks into categories, and optionally fetch video metadata and AI-generated summaries.
 
 **Brand Colors:**
 - Primary: Emerald (#10b981)
@@ -13,14 +13,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Dark BG: Slate (#0f172a)
 
 **Key Features:**
-- Bookmark YouTube videos with metadata
+- **Multi-Source Video Support**: Bookmark videos from YouTube, Vimeo, Loom, Wistia, Google Drive, or direct URLs (.mp4, .webm)
 - Add timestamped notes during video playback
 - Organize videos into custom categories
 - Tag videos with keywords
 - Optional AI summaries via Gemini API
 - **AI Note Enhancement**: Batch-process notes using Gemini to expand with transcript context and format as bullet points
 - **Markdown Export**: Download notes as formatted .md files
-- YouTube API integration for metadata
+- **Transcript Upload**: Upload SRT/VTT subtitle files for non-YouTube videos
+- **AI Transcription**: Generate transcripts via Gemini for videos without transcripts (rate limited)
+- YouTube API integration for metadata, oEmbed for Vimeo/Wistia
 - Data persistence via localStorage and optional server backend
 - **User Profiles**: Edit profile with first name, last name, email, and interests
 - **Video Sharing**: Share videos with other ClipMark users or via email invitation
@@ -51,8 +53,17 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
 3. **Key Data Structures**:
    ```javascript
    Video: {
-     id, videoId, title, category, tags, notes: [Note],
-     publishDate, thumbnail, description, viewCount
+     id, title, category, tags, notes: [Note],
+     publishDate, thumbnail, description, viewCount,
+     // Multi-source fields
+     sourceType,         // 'youtube' | 'vimeo' | 'loom' | 'wistia' | 'direct'
+     sourceId,           // Platform-specific video ID
+     sourceUrl,          // Original URL (needed for direct videos)
+     videoId,            // Deprecated, kept for backward compatibility (YouTube only)
+     transcript: {       // Stored transcript for non-YouTube videos
+       segments: [],     // [{start, duration, text}]
+       source            // 'platform' | 'srt' | 'vtt' | 'ai'
+     }
    }
 
    Note: {
@@ -82,9 +93,16 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
 ### Component Hierarchy
 
 - **App** (main container)
-  - YouTubePlayer (embedded iframe)
+  - **VideoPlayer** (unified player wrapper - switches between adapters based on sourceType)
+    - YouTubePlayer (YouTube IFrame API)
+    - VimeoPlayerAdapter (Vimeo Player SDK)
+    - WistiaPlayerAdapter (Wistia JS API)
+    - LoomPlayerAdapter (iframe embed, limited controls)
+    - GoogleDrivePlayerAdapter (iframe embed, limited controls)
+    - HTML5PlayerAdapter (native `<video>` for direct URLs)
   - VideoCard (grid view thumbnail with view count and notes count)
   - VideoListItem (list view row with metadata)
+  - VideoSourceBadge (shows platform icon for non-YouTube videos)
   - NoteItem (timestamped note with bullet point rendering)
   - AddVideoModal / EditVideoModal
   - CategoryModal
@@ -93,6 +111,8 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
   - ShareModal (share video with user or via email)
   - PendingSharesDropdown (notification bell for incoming shares)
   - EnhancementReviewModal (for reviewing ambiguous AI suggestions)
+  - TranscriptUploadModal (upload SRT/VTT files for non-YouTube videos)
+  - TranscriptStatusBadge (shows transcript source: platform/srt/vtt/ai)
 
 ### Data Loading on Refresh
 
@@ -146,10 +166,16 @@ When the app loads:
 | GET | `/api/shares/preview?token={token}` | Public - get email share preview |
 | POST | `/api/shares/claim?token={token}` | Claim email share after signup |
 
-### Other Endpoints
+### Transcript Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/transcript?v={videoId}` | Fetch YouTube transcript (no auth) |
+| POST | `/api/transcript/upload` | Parse uploaded SRT/VTT file to segments |
+| POST | `/api/transcript/generate` | AI transcription via Gemini (rate limited: 5/hour) |
+
+### Other Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET/POST/PUT | `/bookmarks` | Sync video bookmarks (auth required) |
 | GET/POST/PUT | `/categories` | Sync categories (auth required) |
 | GET | `/api/youtube/video` | Proxy YouTube metadata fetch |
@@ -203,7 +229,7 @@ The "Enhance Notes" feature in the toolbar below the video player batch-processe
 ### Markdown Export
 The "Download .md" button exports notes as a formatted Markdown file including:
 - Video title and publish date
-- YouTube link
+- Source-aware video link (YouTube, Vimeo, Loom, Wistia, or direct URL)
 - Notes organized by timestamp with bullet point formatting
 - Export watermark with date
 
@@ -231,6 +257,11 @@ Videos save with debouncing (500ms) to avoid excessive server requests when mult
 2. **CORS**: The app uses CORS for server communication; ensure backend has proper CORS headers.
 3. **YouTube API Quotas**: Video metadata fetching uses YouTube API quota; batching or caching recommended for many videos.
 4. **Transcript Server**: Requires external access to YouTube; may fail in restricted networks.
+5. **Loom Player Limitations**: Loom's embed API does not support programmatic seeking or time retrieval. Timestamp notes are approximate.
+6. **Google Drive Player Limitations**: Google Drive's embed does not support programmatic seeking or time retrieval. Timestamp notes are approximate.
+7. **AI Transcription Rate Limit**: Limited to 5 AI transcription requests per hour to manage API costs.
+8. **Direct Video Seeking**: Some servers may not support seeking without proper HTTP range request headers.
+9. **Private Videos**: Vimeo/Wistia private videos require embed allowlisting to work in the player.
 
 ## Documentation Requirements
 

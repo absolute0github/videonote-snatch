@@ -4,6 +4,60 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.0.0] - 2026-02-14
+
+### Added
+- **Multi-Source Video Support**: Bookmark videos from multiple platforms beyond YouTube
+  - **Vimeo**: Full player support with Vimeo Player SDK
+  - **Loom**: Embed support (limited: no programmatic seeking)
+  - **Wistia**: Full player support with Wistia JS API
+  - **Google Drive**: Embed support (limited: no programmatic seeking)
+  - **Direct URLs**: Native HTML5 video player for .mp4, .webm, .ogg, .m3u8 files
+- **Video Source Detection**: `parseVideoUrl()` replaces `extractVideoId()` with multi-platform URL parsing
+  - Returns `{ sourceType, sourceId, sourceUrl }` for all supported platforms
+  - Auto-detects platform from URL patterns
+- **Player Adapter Architecture**: Unified `VideoPlayer` wrapper with platform-specific adapters
+  - `VimeoPlayerAdapter`: Full Vimeo SDK integration with async time updates
+  - `HTML5PlayerAdapter`: Native `<video>` element for direct video URLs
+  - `WistiaPlayerAdapter`: Wistia JS API integration with queue system
+  - `LoomPlayerAdapter`: Iframe embed with limitations warning (no seekTo/getCurrentTime)
+  - `GoogleDrivePlayerAdapter`: Iframe embed with limitations warning (no seekTo/getCurrentTime)
+- **VideoSourceBadge Component**: Shows platform icon and name for non-YouTube videos
+- **Transcript Upload**: Upload SRT/VTT subtitle files for non-YouTube videos
+  - `TranscriptUploadModal` component with file picker and preview
+  - `/api/transcript/upload` endpoint parses SRT/VTT to segments
+  - `TranscriptStatusBadge` shows transcript source (platform/srt/vtt/ai)
+  - `TranscriptHelpModal` with instructions for creating free SRT files (Google Docs, Whisper, online tools)
+- **AI Transcription**: Generate transcripts via Gemini for videos without transcripts
+  - `/api/transcript/generate` endpoint with rate limiting (5/hour)
+  - Works with direct video URLs
+- **Data Migration**: Automatic migration of existing YouTube videos to new data structure
+  - `migrateVideoData()` adds `sourceType: 'youtube'` and renames `videoId` to `sourceId`
+  - Backward compatible: `videoId` field preserved for existing code
+
+### Changed
+- **Video Data Structure**: Extended to support multiple sources
+  - New fields: `sourceType`, `sourceId`, `sourceUrl`, `transcript`
+  - `transcript.segments` stores parsed subtitle/transcription data
+  - `transcript.source` indicates origin ('platform', 'srt', 'vtt', 'ai')
+- **AddVideoModal**: Detects source type, shows platform badge, fetches oEmbed metadata for Vimeo/Wistia
+- **VideoCard/VideoListItem**: Source-aware thumbnails with fallback for unavailable thumbnails
+- **Markdown Export**: Now source-aware, exports correct video URLs for all platforms
+- **Export Footer**: Updated from "YouTube Bookmarking App" to "ClipMark"
+
+### Files Modified
+- `app.html` - Added multi-source support, player adapters, transcript UI (~800 lines)
+- `transcript-server.js` - Added SRT/VTT parsing, upload and generate endpoints (~200 lines)
+
+### Known Limitations
+- **Loom**: No player control API - timestamp notes use estimated times, no programmatic seeking
+- **Google Drive**: No player control API - timestamp notes use estimated times, no programmatic seeking
+- **AI Transcription**: Rate limited to 5 transcriptions per hour
+- **Direct URLs**: Some servers may not support seeking without proper range request headers
+- **Private Videos**: Vimeo/Wistia private videos require embed allowlisting
+
+---
+
 ## [Docs] - 2026-02-08
 
 ### Fixed
