@@ -4012,7 +4012,7 @@ Only return the JSON object, no other text.`;
                                                 </p>
                                             )}
                                             {parsed.username && (
-                                                <p className="text-xs text-gray-500">From account: {parsed.username}</p>
+                                                <p className="text-xs text-gray-500">From account: {typeof parsed.username === 'string' ? parsed.username : parsed.username?.username || String(parsed.username)}</p>
                                             )}
                                             {parsed.format === 'legacy' && (
                                                 <p className="text-xs text-yellow-400">Legacy format detected — will be imported as-is</p>
@@ -6666,7 +6666,7 @@ Third subtitle text`}
                     clipmark_backup: true,
                     version: 1,
                     exportedAt: new Date().toISOString(),
-                    username: currentUser || 'unknown',
+                    username: currentUser?.username || 'unknown',
                     stats: {
                         videoCount: videos.length,
                         noteCount,
