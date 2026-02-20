@@ -3843,7 +3843,7 @@ Only return the JSON object, no other text.`;
             const [strategy, setStrategy] = useState('merge');
             const [isImporting, setIsImporting] = useState(false);
             const [result, setResult] = useState(null);
-            const [error, setError] = useState(null);
+            const [importError, setImportError] = useState(null);
 
             // Reset state when modal opens
             useEffect(() => {
@@ -3851,7 +3851,7 @@ Only return the JSON object, no other text.`;
                     setStrategy('merge');
                     setIsImporting(false);
                     setResult(null);
-                    setError(null);
+                    setImportError(null);
                 }
             }, [isOpen]);
 
@@ -3861,41 +3861,47 @@ Only return the JSON object, no other text.`;
             let parsed = null;
             let parseError = null;
 
-            if (importData) {
-                if (importData.clipmark_backup && importData.data) {
-                    // v1 format
-                    const bookmarks = importData.data.bookmarks || [];
-                    const categories = importData.data.categories || [];
-                    const noteCount = bookmarks.reduce((sum, v) => sum + (v.notes?.length || 0), 0);
-                    parsed = {
-                        format: 'v1',
-                        username: importData.username,
-                        exportedAt: importData.exportedAt,
-                        videoCount: bookmarks.length,
-                        noteCount,
-                        categoryCount: categories.length
-                    };
-                } else if (importData.videos || importData.categories) {
-                    // Legacy format
-                    const videos = importData.videos || [];
-                    const categories = importData.categories || [];
-                    const noteCount = videos.reduce((sum, v) => sum + (v.notes?.length || 0), 0);
-                    parsed = {
-                        format: 'legacy',
-                        username: null,
-                        exportedAt: importData.exportedAt,
-                        videoCount: videos.length,
-                        noteCount,
-                        categoryCount: categories.length
-                    };
+            try {
+                if (importData && typeof importData === 'object' && !Array.isArray(importData)) {
+                    if (importData.clipmark_backup && importData.data) {
+                        // v1 format
+                        const bookmarks = Array.isArray(importData.data.bookmarks) ? importData.data.bookmarks : [];
+                        const categories = Array.isArray(importData.data.categories) ? importData.data.categories : [];
+                        const noteCount = bookmarks.reduce((sum, v) => sum + (Array.isArray(v?.notes) ? v.notes.length : 0), 0);
+                        parsed = {
+                            format: 'v1',
+                            username: importData.username,
+                            exportedAt: importData.exportedAt,
+                            videoCount: bookmarks.length,
+                            noteCount,
+                            categoryCount: categories.length
+                        };
+                    } else if (importData.videos || importData.categories) {
+                        // Legacy format
+                        const videos = Array.isArray(importData.videos) ? importData.videos : [];
+                        const categories = Array.isArray(importData.categories) ? importData.categories : [];
+                        const noteCount = videos.reduce((sum, v) => sum + (Array.isArray(v?.notes) ? v.notes.length : 0), 0);
+                        parsed = {
+                            format: 'legacy',
+                            username: null,
+                            exportedAt: importData.exportedAt,
+                            videoCount: videos.length,
+                            noteCount,
+                            categoryCount: categories.length
+                        };
+                    } else {
+                        parseError = 'This file is not a valid ClipMark backup. Expected a file exported from ClipMark.';
+                    }
                 } else {
-                    parseError = 'This file is not a valid ClipMark backup. Expected a file exported from ClipMark.';
+                    parseError = 'This file is not a valid ClipMark backup. Expected a JSON object.';
                 }
+            } catch (e) {
+                parseError = 'Failed to parse backup file: ' + e.message;
             }
 
-            const handleImport = async () => {
+            const doImport = async () => {
                 setIsImporting(true);
-                setError(null);
+                setImportError(null);
 
                 try {
                     const payload = { ...importData, strategy };
@@ -3915,7 +3921,7 @@ Only return the JSON object, no other text.`;
 
                     setResult(data);
                 } catch (err) {
-                    setError(err.message);
+                    setImportError(err.message);
                 } finally {
                     setIsImporting(false);
                 }
@@ -4051,9 +4057,9 @@ Only return the JSON object, no other text.`;
                                 )}
 
                                 {/* Import error */}
-                                {error && (
+                                {importError && (
                                     <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                                        <p className="text-red-400 text-sm">{error}</p>
+                                        <p className="text-red-400 text-sm">{importError}</p>
                                     </div>
                                 )}
 
@@ -4066,7 +4072,7 @@ Only return the JSON object, no other text.`;
                                         Cancel
                                     </button>
                                     <button
-                                        onClick={handleImport}
+                                        onClick={doImport}
                                         disabled={!parsed || isImporting}
                                         className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center gap-2"
                                     >
