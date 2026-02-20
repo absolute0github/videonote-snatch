@@ -3210,6 +3210,13 @@ Format your response as JSON with a "message" field explaining this, and include
     // =============================================
 
     if (url.pathname === '/api/backup/export') {
+        const userId = authenticateRequest(req);
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
         if (req.method !== 'GET') {
             res.writeHead(405, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Method not allowed' }));
@@ -3250,6 +3257,13 @@ Format your response as JSON with a "message" field explaining this, and include
     }
 
     if (url.pathname === '/api/backup/import') {
+        const userId = authenticateRequest(req);
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
         if (req.method !== 'POST') {
             res.writeHead(405, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Method not allowed' }));
