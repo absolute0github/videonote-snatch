@@ -29,6 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Shared Library**: View videos shared with you in a dedicated "Shared with me" tab
 - **Library View Modes**: Toggle between grid and list views in the library
 - **Video View Count**: Track how many times each video has been opened
+- **Backup & Restore**: Export structured backup JSON with metadata; import with merge (deduplicate) or replace strategy via preview modal
 
 ## Architecture
 
@@ -113,6 +114,7 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
   - EnhancementReviewModal (for reviewing ambiguous AI suggestions)
   - TranscriptUploadModal (upload SRT/VTT files for non-YouTube videos)
   - TranscriptStatusBadge (shows transcript source: platform/srt/vtt/ai)
+  - BackupImportModal (preview and import backup files with merge/replace strategy)
 
 ### Data Loading on Refresh
 
@@ -165,6 +167,12 @@ When the app loads:
 | DELETE | `/api/shares/{id}` | Revoke share (owner only) |
 | GET | `/api/shares/preview?token={token}` | Public - get email share preview |
 | POST | `/api/shares/claim?token={token}` | Claim email share after signup |
+
+### Backup Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/backup/export` | Download structured backup JSON with metadata (auth required) |
+| POST | `/api/backup/import` | Import backup with `strategy` field: `"merge"` or `"replace"` (auth required) |
 
 ### Transcript Endpoints
 | Method | Endpoint | Description |

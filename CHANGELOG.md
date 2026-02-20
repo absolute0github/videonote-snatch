@@ -4,6 +4,29 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.1.0] - 2026-02-20
+
+### Added
+- **Backup & Restore**: Full backup/export and import/restore workflow
+  - `GET /api/backup/export` endpoint — downloads structured backup JSON with metadata (video count, note count, category count, username, export date)
+  - `POST /api/backup/import` endpoint — imports backup with merge or replace strategy
+  - `BackupImportModal` component with file preview, stats display, strategy selection (merge/replace), and success summary
+  - Merge strategy deduplicates by `sourceType:sourceId`, remaps category IDs by name
+  - Replace strategy overwrites all data with backup contents
+  - Backward compatible with legacy export format (`{videos, categories, exportedAt}`)
+  - Export uses new `clipmark_backup` v1 format with sentinel field for validation
+  - Backup & Restore buttons added to Settings modal
+  - Header export/import buttons renamed to "Export Backup" / "Import Backup"
+
+### Changed
+- `handleExport` now fetches from server when authenticated, falls back to client-side
+- `handleImport` now opens a preview modal instead of silently overwriting data
+- Export filename changed from `youtube-bookmarks-*.json` to `clipmark-backup-*.json`
+
+### Files Modified
+- `transcript-server.js` — Added `/api/backup/export` and `/api/backup/import` endpoints
+- `app.html` — New `BackupImportModal` component, updated export/import handlers, new state variables, Settings modal updates
+
 ## [3.0.0] - 2026-02-14
 
 ### Added

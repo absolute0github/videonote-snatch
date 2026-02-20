@@ -2753,7 +2753,7 @@ Only return the JSON object, no other text.`;
         };
 
         // Settings Modal
-        const SettingsModal = ({ isOpen, onClose, apiStatus, contextWordCount, onSaveContextWordCount, onOpenProfile }) => {
+        const SettingsModal = ({ isOpen, onClose, apiStatus, contextWordCount, onSaveContextWordCount, onOpenProfile, onExport, onImport }) => {
             const [contextWords, setContextWords] = useState(contextWordCount);
 
             useEffect(() => {
@@ -2865,6 +2865,27 @@ Only return the JSON object, no other text.`;
                                 <p className="text-xs text-gray-500 mt-1">
                                     Default: 10 words. Will load ±{contextWords} words around timestamp.
                                 </p>
+                            </div>
+
+                            {/* Backup & Restore */}
+                            <div>
+                                <label className="block text-sm text-gray-400 mb-2">Backup & Restore</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => { onClose(); onExport(); }}
+                                        className="flex-1 flex items-center justify-center gap-2 bg-gray-700/50 hover:bg-gray-700 rounded-lg px-4 py-3 transition-colors"
+                                    >
+                                        <Icons.Download />
+                                        <span className="text-gray-200 font-medium">Export Backup</span>
+                                    </button>
+                                    <button
+                                        onClick={() => { onClose(); onImport(); }}
+                                        className="flex-1 flex items-center justify-center gap-2 bg-gray-700/50 hover:bg-gray-700 rounded-lg px-4 py-3 transition-colors"
+                                    >
+                                        <Icons.Upload />
+                                        <span className="text-gray-200 font-medium">Import Backup</span>
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="bg-gray-700/50 rounded-lg p-3 text-sm text-gray-400">
@@ -3812,6 +3833,261 @@ Only return the JSON object, no other text.`;
                             Supported formats: SubRip (.srt) and WebVTT (.vtt).
                             Timestamps will be extracted and can be used for note navigation.
                         </p>
+                    </div>
+                </div>
+            );
+        };
+
+        // Backup Import Modal - preview and import backup files
+        const BackupImportModal = ({ isOpen, onClose, importData, fileName, serverUrl, authToken, onImportComplete }) => {
+            const [strategy, setStrategy] = useState('merge');
+            const [isImporting, setIsImporting] = useState(false);
+            const [result, setResult] = useState(null);
+            const [error, setError] = useState(null);
+
+            // Reset state when modal opens
+            useEffect(() => {
+                if (isOpen) {
+                    setStrategy('merge');
+                    setIsImporting(false);
+                    setResult(null);
+                    setError(null);
+                }
+            }, [isOpen]);
+
+            if (!isOpen) return null;
+
+            // Parse and validate the import data
+            let parsed = null;
+            let parseError = null;
+
+            if (importData) {
+                if (importData.clipmark_backup && importData.data) {
+                    // v1 format
+                    const bookmarks = importData.data.bookmarks || [];
+                    const categories = importData.data.categories || [];
+                    const noteCount = bookmarks.reduce((sum, v) => sum + (v.notes?.length || 0), 0);
+                    parsed = {
+                        format: 'v1',
+                        username: importData.username,
+                        exportedAt: importData.exportedAt,
+                        videoCount: bookmarks.length,
+                        noteCount,
+                        categoryCount: categories.length
+                    };
+                } else if (importData.videos || importData.categories) {
+                    // Legacy format
+                    const videos = importData.videos || [];
+                    const categories = importData.categories || [];
+                    const noteCount = videos.reduce((sum, v) => sum + (v.notes?.length || 0), 0);
+                    parsed = {
+                        format: 'legacy',
+                        username: null,
+                        exportedAt: importData.exportedAt,
+                        videoCount: videos.length,
+                        noteCount,
+                        categoryCount: categories.length
+                    };
+                } else {
+                    parseError = 'This file is not a valid ClipMark backup. Expected a file exported from ClipMark.';
+                }
+            }
+
+            const handleImport = async () => {
+                setIsImporting(true);
+                setError(null);
+
+                try {
+                    const payload = { ...importData, strategy };
+                    const response = await fetch(`${serverUrl}/api/backup/import`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Import failed');
+                    }
+
+                    setResult(data);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setIsImporting(false);
+                }
+            };
+
+            const handleDone = () => {
+                onImportComplete();
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-800 rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold flex items-center gap-2">
+                                <Icons.Upload />
+                                Import Backup
+                            </h2>
+                            <button onClick={result ? handleDone : onClose} className="p-1 hover:bg-gray-700 rounded">
+                                <Icons.X />
+                            </button>
+                        </div>
+
+                        {/* Success view */}
+                        {result ? (
+                            <div className="space-y-4">
+                                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                                    <p className="text-emerald-400 font-medium flex items-center gap-2 mb-2">
+                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Import Successful
+                                    </p>
+                                    <div className="text-sm text-gray-300 space-y-1">
+                                        <p>Strategy: <span className="text-gray-100 font-medium">{result.strategy === 'merge' ? 'Merge' : 'Replace All'}</span></p>
+                                        <p>Videos added: <span className="text-emerald-400 font-medium">{result.bookmarks.added}</span></p>
+                                        {result.strategy === 'merge' && (
+                                            <p>Videos skipped (duplicates): <span className="text-gray-400 font-medium">{result.bookmarks.skipped}</span></p>
+                                        )}
+                                        <p>Total videos: <span className="text-gray-100 font-medium">{result.bookmarks.total}</span></p>
+                                        <p>Total categories: <span className="text-gray-100 font-medium">{result.categories.total}</span></p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleDone}
+                                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2 rounded-lg transition-colors"
+                                >
+                                    Done
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {/* File info */}
+                                <div className="bg-gray-700/50 rounded-lg p-3">
+                                    <p className="text-sm text-gray-400 mb-1">File</p>
+                                    <p className="text-gray-200 font-medium truncate">{fileName}</p>
+                                </div>
+
+                                {/* Error for invalid files */}
+                                {parseError && (
+                                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                                        <p className="text-red-400 text-sm">{parseError}</p>
+                                    </div>
+                                )}
+
+                                {/* Parsed stats */}
+                                {parsed && (
+                                    <>
+                                        <div className="bg-gray-700/50 rounded-lg p-3 space-y-2">
+                                            <p className="text-sm text-gray-400 mb-2">Backup Contents</p>
+                                            <div className="grid grid-cols-3 gap-3 text-center">
+                                                <div>
+                                                    <p className="text-2xl font-bold text-emerald-400">{parsed.videoCount}</p>
+                                                    <p className="text-xs text-gray-400">Videos</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-2xl font-bold text-emerald-400">{parsed.noteCount}</p>
+                                                    <p className="text-xs text-gray-400">Notes</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-2xl font-bold text-emerald-400">{parsed.categoryCount}</p>
+                                                    <p className="text-xs text-gray-400">Categories</p>
+                                                </div>
+                                            </div>
+                                            {parsed.exportedAt && (
+                                                <p className="text-xs text-gray-500 mt-2">
+                                                    Exported: {new Date(parsed.exportedAt).toLocaleDateString()} at {new Date(parsed.exportedAt).toLocaleTimeString()}
+                                                </p>
+                                            )}
+                                            {parsed.username && (
+                                                <p className="text-xs text-gray-500">From account: {parsed.username}</p>
+                                            )}
+                                            {parsed.format === 'legacy' && (
+                                                <p className="text-xs text-yellow-400">Legacy format detected — will be imported as-is</p>
+                                            )}
+                                        </div>
+
+                                        {/* Strategy selection */}
+                                        <div>
+                                            <p className="text-sm text-gray-400 mb-2">Import Strategy</p>
+                                            <div className="space-y-2">
+                                                <label className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${strategy === 'merge' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-gray-700/50 border border-transparent hover:bg-gray-700'}`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="import-strategy"
+                                                        value="merge"
+                                                        checked={strategy === 'merge'}
+                                                        onChange={() => setStrategy('merge')}
+                                                        className="mt-1 accent-emerald-500"
+                                                    />
+                                                    <div>
+                                                        <p className="text-gray-200 font-medium">Merge</p>
+                                                        <p className="text-xs text-gray-400">Add new videos only. Existing videos are kept unchanged. Duplicate videos are skipped.</p>
+                                                    </div>
+                                                </label>
+                                                <label className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors ${strategy === 'replace' ? 'bg-red-500/10 border border-red-500/30' : 'bg-gray-700/50 border border-transparent hover:bg-gray-700'}`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="import-strategy"
+                                                        value="replace"
+                                                        checked={strategy === 'replace'}
+                                                        onChange={() => setStrategy('replace')}
+                                                        className="mt-1 accent-red-500"
+                                                    />
+                                                    <div>
+                                                        <p className="text-gray-200 font-medium">Replace All</p>
+                                                        <p className="text-xs text-red-400">Overwrite all current data with the backup. Your existing videos and notes will be permanently removed.</p>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* Import error */}
+                                {error && (
+                                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                                        <p className="text-red-400 text-sm">{error}</p>
+                                    </div>
+                                )}
+
+                                {/* Action buttons */}
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={onClose}
+                                        className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleImport}
+                                        disabled={!parsed || isImporting}
+                                        className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        {isImporting ? (
+                                            <>
+                                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                </svg>
+                                                Importing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Icons.Upload />
+                                                Import
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
@@ -4841,6 +5117,11 @@ Third subtitle text`}
             // Transcript upload modal state
             const [showTranscriptModal, setShowTranscriptModal] = useState(false);
             const [showTranscriptHelp, setShowTranscriptHelp] = useState(false);
+
+            // Backup import modal state
+            const [showImportModal, setShowImportModal] = useState(false);
+            const [importData, setImportData] = useState(null);
+            const [importFileName, setImportFileName] = useState('');
 
             // Authentication state
             const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -6351,13 +6632,47 @@ Third subtitle text`}
             };
 
             // Export/Import
-            const handleExport = () => {
-                const data = { videos, categories, exportedAt: new Date().toISOString() };
+            const handleExport = async () => {
+                try {
+                    if (isAuthenticated && authToken) {
+                        // Server-side export
+                        const response = await fetch(`${SERVER_URL}/api/backup/export`, {
+                            headers: { 'Authorization': `Bearer ${authToken}` }
+                        });
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `clipmark-backup-${new Date().toISOString().split('T')[0]}.json`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                            return;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('⚠️ Server export failed, falling back to client-side:', err.message);
+                }
+
+                // Fallback: client-side export
+                const noteCount = videos.reduce((sum, v) => sum + (v.notes?.length || 0), 0);
+                const data = {
+                    clipmark_backup: true,
+                    version: 1,
+                    exportedAt: new Date().toISOString(),
+                    username: currentUser || 'unknown',
+                    stats: {
+                        videoCount: videos.length,
+                        noteCount,
+                        categoryCount: categories.length
+                    },
+                    data: { bookmarks: videos, categories }
+                };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `youtube-bookmarks-${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `clipmark-backup-${new Date().toISOString().split('T')[0]}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
             };
@@ -6370,14 +6685,42 @@ Third subtitle text`}
                 reader.onload = (event) => {
                     try {
                         const data = JSON.parse(event.target.result);
-                        if (data.videos) setVideos(data.videos);
-                        if (data.categories) setCategories(data.categories);
+                        setImportData(data);
+                        setImportFileName(file.name);
+                        setShowImportModal(true);
                     } catch (err) {
-                        alert('Invalid file format');
+                        setImportData({});
+                        setImportFileName(file.name);
+                        setShowImportModal(true);
                     }
                 };
                 reader.readAsText(file);
                 e.target.value = '';
+            };
+
+            const handleImportComplete = async () => {
+                try {
+                    if (isAuthenticated && authToken) {
+                        const [bookmarksRes, categoriesRes] = await Promise.all([
+                            fetch(`${SERVER_URL}/bookmarks`, {
+                                headers: { 'Authorization': `Bearer ${authToken}` }
+                            }),
+                            fetch(`${SERVER_URL}/categories`, {
+                                headers: { 'Authorization': `Bearer ${authToken}` }
+                            })
+                        ]);
+                        if (bookmarksRes.ok) {
+                            const bookmarks = await bookmarksRes.json();
+                            if (Array.isArray(bookmarks)) setVideos(bookmarks);
+                        }
+                        if (categoriesRes.ok) {
+                            const cats = await categoriesRes.json();
+                            if (Array.isArray(cats)) setCategories(cats);
+                        }
+                    }
+                } catch (err) {
+                    console.error('❌ Error reloading data after import:', err.message);
+                }
             };
 
             // Show loading screen while checking authentication
@@ -6533,14 +6876,14 @@ Third subtitle text`}
                             <button
                                 onClick={handleExport}
                                 className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg"
-                                title="Export Bookmarks"
+                                title="Export Backup"
                             >
                                 <Icons.Download />
                             </button>
                             <button
                                 onClick={() => fileInputRef.current?.click()}
                                 className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg"
-                                title="Import Bookmarks"
+                                title="Import Backup"
                             >
                                 <Icons.Upload />
                             </button>
@@ -7249,6 +7592,8 @@ Third subtitle text`}
                         contextWordCount={contextWordCount}
                         onSaveContextWordCount={handleSaveContextWordCount}
                         onOpenProfile={() => setShowProfileModal(true)}
+                        onExport={handleExport}
+                        onImport={() => fileInputRef.current?.click()}
                     />
                     <ProfileModal
                         isOpen={showProfileModal}
@@ -7273,6 +7618,15 @@ Third subtitle text`}
                         onUpload={handleTranscriptUpload}
                         serverUrl={SERVER_URL}
                         authToken={authToken}
+                    />
+                    <BackupImportModal
+                        isOpen={showImportModal}
+                        onClose={() => { setShowImportModal(false); setImportData(null); }}
+                        importData={importData}
+                        fileName={importFileName}
+                        serverUrl={SERVER_URL}
+                        authToken={authToken}
+                        onImportComplete={handleImportComplete}
                     />
                     <TranscriptHelpModal
                         isOpen={showTranscriptHelp}

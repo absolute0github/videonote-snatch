@@ -3206,6 +3206,179 @@ Format your response as JSON with a "message" field explaining this, and include
     }
 
     // =============================================
+    // BACKUP / RESTORE ENDPOINTS
+    // =============================================
+
+    if (url.pathname === '/api/backup/export') {
+        if (req.method !== 'GET') {
+            res.writeHead(405, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Method not allowed' }));
+            return;
+        }
+
+        const bookmarks = readUserBookmarks(userId);
+        const categories = readUserCategories(userId);
+        const users = readUsers();
+        const username = users[userId]?.username || 'unknown';
+
+        const noteCount = bookmarks.reduce((sum, v) => sum + (v.notes?.length || 0), 0);
+
+        const backup = {
+            clipmark_backup: true,
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            username,
+            stats: {
+                videoCount: bookmarks.length,
+                noteCount,
+                categoryCount: categories.length
+            },
+            data: {
+                bookmarks,
+                categories
+            }
+        };
+
+        const dateStr = new Date().toISOString().split('T')[0];
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Content-Disposition': `attachment; filename="clipmark-backup-${dateStr}.json"`
+        });
+        res.end(JSON.stringify(backup, null, 2));
+        console.log(`📦 GET /api/backup/export - exported ${bookmarks.length} bookmarks, ${categories.length} categories for user ${userId}`);
+        return;
+    }
+
+    if (url.pathname === '/api/backup/import') {
+        if (req.method !== 'POST') {
+            res.writeHead(405, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Method not allowed' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const strategy = body.strategy || 'merge';
+
+            if (strategy !== 'merge' && strategy !== 'replace') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid strategy. Use "merge" or "replace".' }));
+                return;
+            }
+
+            // Parse backup data - support both v1 and legacy format
+            let importBookmarks, importCategories;
+
+            if (body.clipmark_backup && body.data) {
+                // v1 format
+                importBookmarks = body.data.bookmarks;
+                importCategories = body.data.categories;
+            } else if (body.videos || body.categories) {
+                // Legacy format
+                importBookmarks = body.videos;
+                importCategories = body.categories;
+            } else {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid backup format. Expected ClipMark backup file.' }));
+                return;
+            }
+
+            if (!Array.isArray(importBookmarks)) importBookmarks = [];
+            if (!Array.isArray(importCategories)) importCategories = [];
+
+            // Filter out entries without IDs
+            importBookmarks = importBookmarks.filter(b => b && b.id);
+            importCategories = importCategories.filter(c => c && c.id);
+
+            let result;
+
+            if (strategy === 'replace') {
+                writeUserBookmarks(userId, importBookmarks);
+                writeUserCategories(userId, importCategories);
+                result = {
+                    success: true,
+                    strategy: 'replace',
+                    bookmarks: { total: importBookmarks.length, added: importBookmarks.length, skipped: 0 },
+                    categories: { total: importCategories.length }
+                };
+            } else {
+                // Merge strategy
+                const existingBookmarks = readUserBookmarks(userId);
+                const existingCategories = readUserCategories(userId);
+
+                // Build dedup key set for existing bookmarks
+                const existingKeys = new Set();
+                for (const b of existingBookmarks) {
+                    const key = b.sourceType && b.sourceId
+                        ? `${b.sourceType}:${b.sourceId}`
+                        : (b.videoId ? `youtube:${b.videoId}` : b.id);
+                    existingKeys.add(key);
+                }
+
+                // Build category name -> id map (case-insensitive)
+                const existingCatMap = new Map();
+                for (const c of existingCategories) {
+                    existingCatMap.set(c.name.toLowerCase(), c.id);
+                }
+
+                // Merge categories first (dedup by name)
+                let newCatCount = 0;
+                const catIdRemap = new Map(); // old imported cat ID -> existing cat ID
+                for (const ic of importCategories) {
+                    const lowerName = ic.name.toLowerCase();
+                    if (existingCatMap.has(lowerName)) {
+                        catIdRemap.set(ic.id, existingCatMap.get(lowerName));
+                    } else {
+                        existingCategories.push(ic);
+                        existingCatMap.set(lowerName, ic.id);
+                        newCatCount++;
+                    }
+                }
+
+                // Merge bookmarks (dedup by sourceType:sourceId)
+                let added = 0;
+                let skipped = 0;
+                for (const b of importBookmarks) {
+                    const key = b.sourceType && b.sourceId
+                        ? `${b.sourceType}:${b.sourceId}`
+                        : (b.videoId ? `youtube:${b.videoId}` : b.id);
+
+                    if (existingKeys.has(key)) {
+                        skipped++;
+                    } else {
+                        // Remap category ID if needed
+                        if (b.category && catIdRemap.has(b.category)) {
+                            b.category = catIdRemap.get(b.category);
+                        }
+                        existingBookmarks.push(b);
+                        existingKeys.add(key);
+                        added++;
+                    }
+                }
+
+                writeUserBookmarks(userId, existingBookmarks);
+                writeUserCategories(userId, existingCategories);
+
+                result = {
+                    success: true,
+                    strategy: 'merge',
+                    bookmarks: { total: existingBookmarks.length, added, skipped },
+                    categories: { total: existingCategories.length }
+                };
+            }
+
+            console.log(`📦 POST /api/backup/import - ${strategy}: ${result.bookmarks.added} added, ${result.bookmarks.skipped || 0} skipped for user ${userId}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+        } catch (e) {
+            console.error('❌ Import error:', e.message);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
+    // =============================================
     // PUBLIC ENDPOINTS (no authentication required)
     // =============================================
 
