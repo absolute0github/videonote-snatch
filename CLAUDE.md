@@ -117,10 +117,13 @@ The app is a **single HTML file** (`app.html`) with React components embedded us
 ### Data Loading on Refresh
 
 When the app loads:
-1. Loads categories from localStorage
-2. Attempts to fetch bookmarks from server; falls back to localStorage
-3. Loads API keys from localStorage (device-local only)
-4. Any changes are debounced and saved to both localStorage and server
+1. Validates auth token with `/auth/check`
+2. Loads categories from server
+3. Loads bookmarks from server; if server returns empty, falls back to localStorage, then to server backup (`/bookmarks/recover`)
+4. Loads API keys from localStorage (device-local only)
+5. Changes are debounced (500ms) and synced to both localStorage and server
+6. **Empty array protection**: Sync and page unload handlers refuse to save/sync empty video arrays to prevent accidental data loss
+7. **Server-side backup**: Every successful bookmark write creates a rolling `bookmarks.backup.json`; the server refuses to overwrite non-empty data with empty arrays (returns HTTP 409)
 
 **Important**: Notes are stored as nested arrays within video objects, not separately. When a video is deleted, all its notes are deleted.
 
@@ -176,8 +179,9 @@ When the app loads:
 ### Other Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET/POST/PUT | `/bookmarks` | Sync video bookmarks (auth required) |
-| GET/POST/PUT | `/categories` | Sync categories (auth required) |
+| GET/POST | `/bookmarks` | Sync video bookmarks (auth required, POST rejects empty arrays if data exists) |
+| GET/POST | `/bookmarks/recover` | GET checks for backup; POST restores backup to main bookmarks (auth required) |
+| GET/POST | `/categories` | Sync categories (auth required) |
 | GET | `/api/youtube/video` | Proxy YouTube metadata fetch |
 | POST | `/api/gemini` | Proxy Gemini AI requests |
 | POST | `/api/admin/watch-time` | Track video watch time |
@@ -262,6 +266,7 @@ Videos save with debouncing (500ms) to avoid excessive server requests when mult
 7. **AI Transcription Rate Limit**: Limited to 5 AI transcription requests per hour to manage API costs.
 8. **Direct Video Seeking**: Some servers may not support seeking without proper HTTP range request headers.
 9. **Private Videos**: Vimeo/Wistia private videos require embed allowlisting to work in the player.
+10. **Bookmark Data Protection**: Empty bookmark arrays are never synced to the server. The server refuses POST of empty arrays when non-empty data exists (HTTP 409). Rolling backups are created on every write. If data is lost, the app tries localStorage then server backup recovery automatically.
 
 ## Documentation Requirements
 

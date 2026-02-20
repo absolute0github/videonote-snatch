@@ -4992,11 +4992,60 @@ Third subtitle text`}
                     });
                     if (response.ok) {
                         const serverData = await response.json();
-                        if (Array.isArray(serverData)) {
+                        if (Array.isArray(serverData) && serverData.length > 0) {
                             // Apply migration for multi-source video support
                             const migratedData = migrateVideosArray(serverData);
                             setVideos(migratedData);
                             console.log('✅ Loaded bookmarks from server:', migratedData.length);
+                        } else {
+                            // Server returned empty array — try localStorage fallback
+                            console.warn('⚠️ Server returned empty bookmarks, trying localStorage fallback...');
+                            let recovered = false;
+                            try {
+                                const savedVideos = localStorage.getItem('ytBookmarks_videos');
+                                if (savedVideos) {
+                                    const parsedVideos = JSON.parse(savedVideos);
+                                    if (Array.isArray(parsedVideos) && parsedVideos.length > 0) {
+                                        const migratedData = migrateVideosArray(parsedVideos);
+                                        setVideos(migratedData);
+                                        console.log('✅ Recovered bookmarks from localStorage:', migratedData.length);
+                                        // Re-sync recovered data to server
+                                        syncToServer(migratedData, categories);
+                                        recovered = true;
+                                    }
+                                }
+                            } catch (lsError) {
+                                console.warn('Could not read localStorage fallback:', lsError.message);
+                            }
+
+                            // Last resort: try server backup file
+                            if (!recovered) {
+                                try {
+                                    const backupResponse = await fetch(`${SERVER_URL}/bookmarks/recover`, {
+                                        headers: { 'Authorization': `Bearer ${token}` }
+                                    });
+                                    if (backupResponse.ok) {
+                                        const backupData = await backupResponse.json();
+                                        if (Array.isArray(backupData) && backupData.length > 0) {
+                                            const migratedData = migrateVideosArray(backupData);
+                                            setVideos(migratedData);
+                                            console.log('✅ Recovered bookmarks from server backup:', migratedData.length);
+                                            // Restore backup to main bookmarks on server
+                                            await fetch(`${SERVER_URL}/bookmarks/recover`, {
+                                                method: 'POST',
+                                                headers: { 'Authorization': `Bearer ${token}` }
+                                            });
+                                            recovered = true;
+                                        }
+                                    }
+                                } catch (backupError) {
+                                    console.warn('Could not recover from server backup:', backupError.message);
+                                }
+                            }
+
+                            if (!recovered) {
+                                console.log('⚠️ No bookmarks found in any source — user may have no videos yet');
+                            }
                         }
                     } else if (response.status === 401) {
                         // Token is invalid, show auth modal
@@ -5436,20 +5485,21 @@ Third subtitle text`}
             // Debounced server sync effect for videos
             const saveTimeoutRef = useRef(null);
             useEffect(() => {
-                // Only sync when authenticated
+                // Only sync when authenticated and we have data to save
+                // IMPORTANT: Never sync empty arrays to prevent data loss
                 if (!isAuthenticated) return;
+                if (videos.length === 0) {
+                    console.log('⚠️ Skipping sync — videos array is empty');
+                    return;
+                }
 
                 // Save immediately to localStorage (backup)
-                if (videos.length > 0) {
-                    saveImmediately(videos, categories);
-                }
+                saveImmediately(videos, categories);
 
                 // Debounce server sync to avoid too many requests
                 if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
                 saveTimeoutRef.current = setTimeout(() => {
-                    if (videos.length > 0 || categories.length > 0) {
-                        syncToServer(videos, categories);
-                    }
+                    syncToServer(videos, categories);
                 }, 500);
 
                 return () => clearTimeout(saveTimeoutRef.current);
@@ -5458,18 +5508,22 @@ Third subtitle text`}
             // Page lifecycle handlers to save on unload (iOS Safari support)
             useEffect(() => {
                 const handleBeforeUnload = (e) => {
-                    // Force immediate save before page unload
-                    saveImmediately(videos, categories);
+                    // Force immediate save before page unload (only if we have data)
+                    if (videos.length > 0) {
+                        saveImmediately(videos, categories);
+                    }
                 };
 
                 const handlePageHide = (e) => {
-                    // iOS Safari - more reliable than beforeunload
-                    saveImmediately(videos, categories);
+                    // iOS Safari - more reliable than beforeunload (only if we have data)
+                    if (videos.length > 0) {
+                        saveImmediately(videos, categories);
+                    }
                 };
 
                 const handleVisibilityChange = () => {
-                    // Tab backgrounded on mobile
-                    if (document.hidden) {
+                    // Tab backgrounded on mobile (only if we have data)
+                    if (document.hidden && videos.length > 0) {
                         saveImmediately(videos, categories);
                     }
                 };

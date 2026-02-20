@@ -4,6 +4,22 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.0.1] - 2026-02-20
+
+### Fixed
+- **Critical: Video data loss on load** — `loadUserData()` treated empty server responses as valid data, overwriting existing videos with an empty array. Now requires `length > 0` check before accepting server data.
+- **Critical: No localStorage fallback for authenticated users** — When server returns empty bookmarks, the app now falls back to localStorage and then to server backup files before giving up.
+- **Critical: Logout/sync race condition** — Logging out set `videos` to `[]`, and the debounced sync could persist that empty array to the server, erasing all data permanently. Sync now refuses to send empty arrays.
+- **Critical: Page unload saving empty arrays** — `beforeunload`, `pagehide`, and `visibilitychange` handlers now skip saving when the videos array is empty.
+
+### Added
+- **Server-side bookmark backups** — Every successful bookmark write creates a rolling `bookmarks.backup.json` file. If an empty array is POSTed, the server refuses the write (HTTP 409) and preserves the backup.
+- **Bookmark recovery endpoint** — `GET /bookmarks/recover` checks for backup data; `POST /bookmarks/recover` restores it. The app automatically tries this as a last resort when both server and localStorage are empty.
+
+### Files Modified
+- `app.html` — `loadUserData()`, debounced sync effect, page lifecycle handlers
+- `transcript-server.js` — `writeUserBookmarks()`, `readUserBookmarkBackup()`, `/bookmarks` POST handler, new `/bookmarks/recover` endpoint
+
 ## [3.0.0] - 2026-02-14
 
 ### Added

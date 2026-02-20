@@ -822,17 +822,60 @@ function readUserBookmarks(userId) {
     return [];
 }
 
-// Write user bookmarks
+// Write user bookmarks (with backup protection)
 function writeUserBookmarks(userId, bookmarks) {
     try {
         ensureUserDataDir(userId);
         const filePath = path.join(getUserDataDir(userId), 'bookmarks.json');
+        const backupPath = path.join(getUserDataDir(userId), 'bookmarks.backup.json');
+
+        // Safety: if incoming data is empty but existing file has data, refuse the write
+        if (Array.isArray(bookmarks) && bookmarks.length === 0 && fs.existsSync(filePath)) {
+            try {
+                const existing = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                if (Array.isArray(existing) && existing.length > 0) {
+                    fs.writeFileSync(backupPath, JSON.stringify(existing, null, 2));
+                    console.warn(`⚠️ Empty bookmarks array received for user ${userId} — backed up ${existing.length} existing bookmarks`);
+                    return false; // Refuse to overwrite non-empty data with empty array
+                }
+            } catch (backupErr) {
+                console.error(`Error creating bookmark backup for user ${userId}:`, backupErr.message);
+            }
+        }
+
+        // Create a backup of existing data before overwriting (rolling backup)
+        if (fs.existsSync(filePath) && Array.isArray(bookmarks) && bookmarks.length > 0) {
+            try {
+                const existing = fs.readFileSync(filePath, 'utf8');
+                const parsed = JSON.parse(existing);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    fs.writeFileSync(backupPath, existing);
+                }
+            } catch (backupErr) {
+                // Non-fatal — proceed with write
+            }
+        }
+
         fs.writeFileSync(filePath, JSON.stringify(bookmarks, null, 2));
         return true;
     } catch (e) {
         console.error(`Error writing bookmarks for user ${userId}:`, e.message);
         return false;
     }
+}
+
+// Read user bookmark backup (for recovery)
+function readUserBookmarkBackup(userId) {
+    try {
+        const backupPath = path.join(getUserDataDir(userId), 'bookmarks.backup.json');
+        if (fs.existsSync(backupPath)) {
+            const data = fs.readFileSync(backupPath, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (e) {
+        console.error(`Error reading bookmark backup for user ${userId}:`, e.message);
+    }
+    return null;
 }
 
 // Read user categories
@@ -3151,10 +3194,16 @@ Format your response as JSON with a "message" field explaining this, and include
             try {
                 const bookmarks = await parseBody(req);
                 if (Array.isArray(bookmarks)) {
-                    writeUserBookmarks(userId, bookmarks);
-                    console.log(`📚 POST /bookmarks - saved ${bookmarks.length} bookmarks for user ${userId}`);
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: true, count: bookmarks.length }));
+                    const written = writeUserBookmarks(userId, bookmarks);
+                    if (written) {
+                        console.log(`📚 POST /bookmarks - saved ${bookmarks.length} bookmarks for user ${userId}`);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true, count: bookmarks.length }));
+                    } else {
+                        console.warn(`📚 POST /bookmarks - refused to overwrite with empty array for user ${userId}`);
+                        res.writeHead(409, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Refusing to overwrite existing bookmarks with empty array', protected: true }));
+                    }
                 } else {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Expected array of bookmarks' }));
@@ -3162,6 +3211,46 @@ Format your response as JSON with a "message" field explaining this, and include
             } catch (e) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: e.message }));
+            }
+            return;
+        }
+    }
+
+    // Bookmark recovery API - restore from backup
+    if (url.pathname === '/bookmarks/recover') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        if (req.method === 'GET') {
+            const backup = readUserBookmarkBackup(userId);
+            if (backup && Array.isArray(backup) && backup.length > 0) {
+                console.log(`🔄 GET /bookmarks/recover - found ${backup.length} bookmarks in backup for user ${userId}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(backup));
+            } else {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No backup found' }));
+            }
+            return;
+        }
+
+        if (req.method === 'POST') {
+            // Restore backup to main bookmarks
+            const backup = readUserBookmarkBackup(userId);
+            if (backup && Array.isArray(backup) && backup.length > 0) {
+                const filePath = path.join(getUserDataDir(userId), 'bookmarks.json');
+                fs.writeFileSync(filePath, JSON.stringify(backup, null, 2));
+                console.log(`🔄 POST /bookmarks/recover - restored ${backup.length} bookmarks from backup for user ${userId}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, count: backup.length, bookmarks: backup }));
+            } else {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No backup found to restore' }));
             }
             return;
         }
