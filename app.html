@@ -1884,6 +1884,20 @@ Only return the JSON object, no other text.`;
                                 <Icons.Edit />
                             </button>
                         )}
+                        {onDelete && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm('Delete this video and all its notes?')) {
+                                        onDelete();
+                                    }
+                                }}
+                                className="bg-red-500 hover:bg-red-600 p-2 rounded-lg"
+                                title="Delete video"
+                            >
+                                <Icons.Trash />
+                            </button>
+                        )}
                     </div>
                     {/* Shared badge */}
                     {isShared && (
@@ -2040,6 +2054,20 @@ Only return the JSON object, no other text.`;
                                 title="Edit video"
                             >
                                 <Icons.Edit />
+                            </button>
+                        )}
+                        {onDelete && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm('Delete this video and all its notes?')) {
+                                        onDelete();
+                                    }
+                                }}
+                                className="bg-red-500 hover:bg-red-600 p-2 rounded-lg"
+                                title="Delete video"
+                            >
+                                <Icons.Trash />
                             </button>
                         )}
                     </div>
@@ -6034,7 +6062,10 @@ Third subtitle text`}
 
             const handleDeleteVideo = (id) => {
                 setVideos(prev => prev.filter(v => v.id !== id));
-                if (activeVideoId === id) setActiveVideoId(null);
+                if (activeVideoId === id) {
+                    setActiveVideoId(null);
+                    setShowLibrary(true);
+                }
             };
 
             const handleEditVideo = (videoId) => {
@@ -7572,8 +7603,12 @@ Third subtitle text`}
                                                                     </svg>
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => handleDeleteVideo(activeVideo.id)}
-                                                                    className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-emerald-400"
+                                                                    onClick={() => {
+                                                                        if (confirm('Delete this video and all its notes?')) {
+                                                                            handleDeleteVideo(activeVideo.id);
+                                                                        }
+                                                                    }}
+                                                                    className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-red-400"
                                                                     title="Delete video"
                                                                 >
                                                                     <Icons.Trash />
