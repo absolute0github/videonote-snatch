@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [3.2.0] - 2026-02-22
 
+### Changed
+- **Marketing page redesign**: Complete overhaul of `index.html` with cinematic editorial aesthetic
+  - New typography: Syne (display) + Outfit (body) replacing Inter
+  - Film grain texture overlays and film strip dividers
+  - Scroll-triggered reveal animations with staggered timing
+  - New "Multi-Platform" section showcasing all 6 supported video platforms
+  - Added feature cards for: Favorite Notes, Recently Watched, Video Sharing, Backup & Restore
+  - Updated hero mockup showing multi-platform badges and favorite star icons
+  - Updated "How It Works" steps for multi-platform workflow
+  - Updated benefits section with team collaboration focus
+  - Copyright updated to 2026
+
 ### Added
 - **Favorite Notes**: Star button on each note to mark it as a favorite (yellow when active, gray when not). Favorites persist via existing `/bookmarks` sync.
 - **Favorites First Toggle**: Toggle button in the notes panel to sort favorited notes to the top while preserving timestamp order within groups.
