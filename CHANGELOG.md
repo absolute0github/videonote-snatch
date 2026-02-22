@@ -4,6 +4,18 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.2.1] - 2026-02-22
+
+### Changed
+- **Custom domain**: Migrated from `videonote-snatch-production.up.railway.app` to `clipmark.top`
+  - DNS managed via Cloudflare (CNAME flattening for root domain)
+  - `www.clipmark.top` redirects to `clipmark.top` via Cloudflare redirect rule (301)
+  - SSL handled by Cloudflare + Railway
+  - Set `APP_URL=https://clipmark.top` environment variable in Railway for email share links
+
+### No Code Changes
+- All URLs in the codebase use relative paths or dynamic detection — no code modifications required
+
 ## [3.2.0] - 2026-02-22
 
 ### Changed

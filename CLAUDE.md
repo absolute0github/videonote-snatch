@@ -196,6 +196,32 @@ When the app loads:
 | GET | `/` | Serves `index.html` (landing page) |
 | GET | `/app` | Serves `app.html` (main app) |
 
+## Deployment
+
+**Production URL**: https://clipmark.top
+
+**Hosting**: Railway (Docker/nixpacks)
+- **DNS**: Cloudflare (free plan) — CNAME flattening for root domain pointing to Railway
+- **SSL**: Cloudflare (edge) + Railway (origin), SSL mode set to Full
+- **www redirect**: Cloudflare redirect rule, `www.clipmark.top` → `clipmark.top` (301)
+- **Port**: Railway auto-detects port 8080; server listens on `process.env.PORT`
+- **Persistent storage**: Railway volume mounted at `RAILWAY_VOLUME_MOUNT_PATH`
+
+### Required Environment Variables (Railway)
+| Variable | Description |
+|----------|-------------|
+| `APP_URL` | `https://clipmark.top` — used for email share links |
+| `PORT` | Set by Railway automatically |
+| `GEMINI_API_KEY` | For AI summaries and transcription |
+| `YOUTUBE_API_KEY` | For video metadata |
+| `RESEND_API_KEY` | Email service for invitations |
+| `RAILWAY_VOLUME_MOUNT_PATH` | Set by Railway for persistent data |
+
+### Domain Setup Notes
+- The app uses relative paths and dynamic server URL detection — no hardcoded domains in code
+- CORS is set to `*` (allows all origins)
+- If YouTube API key has HTTP referrer restrictions in Google Cloud Console, add `clipmark.top/*`
+
 ## Common Development Commands
 
 ```bash
