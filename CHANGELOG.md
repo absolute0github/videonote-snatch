@@ -4,6 +4,28 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.1.2] - 2026-02-22
+
+### Changed
+- **Get Details for existing videos**: The "Get Publish Date" button is now "Get Details" and fetches description, publish date, and high-res thumbnail from the YouTube API in one call
+- Button appears on both grid and list views for YouTube videos missing a description or publish date
+- Descriptions persist to server and display in the collapsible description panel when viewing the video
+
+### Files Modified
+- `app.html` — Updated `handleFetchPublishDate` to store description and thumbnail; updated VideoCard and VideoListItem buttons
+
+## [3.1.1] - 2026-02-21
+
+### Added
+- **Video Description Panel**: Collapsible description section below the note input area for YouTube videos. Shows first two lines with "Show more/less" toggle and chevron indicator. Only visible when the video has a description.
+
+### Changed
+- **Get Context button**: Background changed from gray to red (`bg-red-600`) for visual distinction
+- **Add Note button**: Confirmed gray (`bg-gray-700`) when note input is empty, turns green (`bg-emerald-500`) when text is entered
+
+### Files Modified
+- `app.html` — Added `showFullDescription` state, description panel UI, updated Get Context button color
+
 ## [3.1.0] - 2026-02-20
 
 ### Added
