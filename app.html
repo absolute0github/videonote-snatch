@@ -439,6 +439,21 @@
                     <line x1="12" y1="16" x2="12" y2="12" strokeWidth={2} strokeLinecap="round" />
                     <line x1="12" y1="8" x2="12.01" y2="8" strokeWidth={2} strokeLinecap="round" />
                 </svg>
+            ),
+            Star: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+            ),
+            StarFilled: () => (
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+            ),
+            ChevronDown: () => (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
             )
         };
 
@@ -1603,7 +1618,7 @@ Only return the JSON object, no other text.`;
         };
 
         // Note Item Component
-        const NoteItem = ({ note, onSeek, onDelete, onEdit, searchTerm }) => {
+        const NoteItem = ({ note, onSeek, onDelete, onEdit, onToggleFavorite, searchTerm }) => {
             const [isEditing, setIsEditing] = useState(false);
             const [editText, setEditText] = useState(note.text);
             const [showOriginal, setShowOriginal] = useState(false);
@@ -1688,6 +1703,15 @@ Only return the JSON object, no other text.`;
                             )}
                         </div>
                         <div className="flex gap-1">
+                            {onToggleFavorite && (
+                                <button
+                                    onClick={() => onToggleFavorite(note.id)}
+                                    className={`p-1 hover:bg-gray-700 rounded transition-colors ${note.favorite ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`}
+                                    title={note.favorite ? 'Remove from favorites' : 'Add to favorites'}
+                                >
+                                    {note.favorite ? <Icons.StarFilled /> : <Icons.Star />}
+                                </button>
+                            )}
                             <button
                                 onClick={() => setIsEditing(true)}
                                 className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-gray-200"
@@ -5110,6 +5134,9 @@ Third subtitle text`}
             const [libraryViewMode, setLibraryViewMode] = useState('grid'); // 'grid' or 'list'
             const [newNote, setNewNote] = useState('');
             const [noteSearch, setNoteSearch] = useState('');
+            const [showFavoritesFirst, setShowFavoritesFirst] = useState(false);
+            const [showRecentlyWatched, setShowRecentlyWatched] = useState(true);
+            const [showFavoritedNotes, setShowFavoritedNotes] = useState(true);
             const [geminiApiKey, setGeminiApiKey] = useState(''); // Deprecated - kept for backward compatibility
             const [youtubeApiKey, setYoutubeApiKey] = useState(''); // Deprecated - kept for backward compatibility
             const [apiStatus, setApiStatus] = useState({ geminiConfigured: false, youtubeConfigured: false });
@@ -5987,6 +6014,19 @@ Third subtitle text`}
                 return 0; // default
             });
 
+            // Recently watched videos (last 5 opened)
+            const recentlyWatched = [...videos]
+                .filter(v => v.lastWatchedAt)
+                .sort((a, b) => b.lastWatchedAt.localeCompare(a.lastWatchedAt))
+                .slice(0, 5);
+
+            // All favorited notes across all videos
+            const allFavoritedNotes = videos.flatMap(video =>
+                (video.notes || [])
+                    .filter(n => n.favorite)
+                    .map(n => ({ ...n, videoId: video.id, videoTitle: video.title }))
+            ).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
             // Video handlers
             const handleAddVideo = (video) => {
                 setVideos(prev => [...prev, video]);
@@ -6019,7 +6059,7 @@ Third subtitle text`}
             const incrementViewCount = (videoId) => {
                 setVideos(prev => prev.map(v =>
                     v.id === videoId
-                        ? { ...v, viewCount: (v.viewCount || 0) + 1 }
+                        ? { ...v, viewCount: (v.viewCount || 0) + 1, lastWatchedAt: new Date().toISOString() }
                         : v
                 ));
             };
@@ -6032,6 +6072,16 @@ Third subtitle text`}
                 setShowLibrary(false);
                 setShowSharedWithMe(false);
                 setNoteSearch('');
+            };
+
+            const handleNavigateToNote = (videoId, timestamp) => {
+                handleSelectVideo(videoId);
+                // Delay seek to allow player to initialize
+                setTimeout(() => {
+                    if (playerRef.current && playerRef.current.seekTo) {
+                        playerRef.current.seekTo(timestamp, true);
+                    }
+                }, 1500);
             };
 
             const handleRefresh = async () => {
@@ -6247,6 +6297,35 @@ Third subtitle text`}
                             notes: video.notes.map(n =>
                                 n.id === noteId ? { ...n, text: newText } : n
                             ).sort((a, b) => b.timestamp - a.timestamp)
+                        };
+                    }
+                    return video;
+                }));
+            };
+
+            const handleToggleFavorite = (noteId) => {
+                // Handle shared videos
+                if (activeSharedVideo) {
+                    const updatedNotes = (activeSharedVideo.notes || []).map(n =>
+                        n.id === noteId ? { ...n, favorite: !n.favorite } : n
+                    );
+                    const updatedSharedVideo = { ...activeSharedVideo, notes: updatedNotes };
+                    setSharedWithMe(prev => prev.map(shared =>
+                        shared.shareId === activeSharedVideo.shareId ? updatedSharedVideo : shared
+                    ));
+                    setActiveSharedVideo(updatedSharedVideo);
+                    saveSharedVideosToServer(activeSharedVideo.shareId, updatedNotes);
+                    return;
+                }
+
+                // Handle regular videos
+                setVideos(prev => prev.map(video => {
+                    if (video.id === activeVideoId) {
+                        return {
+                            ...video,
+                            notes: video.notes.map(n =>
+                                n.id === noteId ? { ...n, favorite: !n.favorite } : n
+                            )
                         };
                     }
                     return video;
@@ -7237,6 +7316,87 @@ Third subtitle text`}
                                                 </button>
                                             </div>
                                         </div>
+
+                                        {/* Recently Watched Section */}
+                                        {recentlyWatched.length > 0 && (
+                                            <div className="bg-gray-800 rounded-lg p-4 mb-4">
+                                                <button
+                                                    onClick={() => setShowRecentlyWatched(v => !v)}
+                                                    className="w-full flex items-center justify-between text-left gap-2 group"
+                                                >
+                                                    <span className="flex items-center gap-2 text-sm font-semibold text-gray-300">
+                                                        <Icons.Clock />
+                                                        Recently Watched
+                                                        <span className="text-xs text-gray-500 font-normal">({recentlyWatched.length})</span>
+                                                    </span>
+                                                    <span className={`text-gray-500 group-hover:text-gray-300 transition-transform ${showRecentlyWatched ? 'rotate-180' : ''}`}>
+                                                        <Icons.ChevronDown />
+                                                    </span>
+                                                </button>
+                                                {showRecentlyWatched && (
+                                                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                                        {recentlyWatched.map(video => (
+                                                            <div
+                                                                key={video.id}
+                                                                className="cursor-pointer rounded-lg overflow-hidden bg-gray-700 hover:ring-2 hover:ring-emerald-500/50 transition-all"
+                                                                onClick={() => handleSelectVideo(video.id)}
+                                                            >
+                                                                <img
+                                                                    src={video.thumbnail || `https://img.youtube.com/vi/${video.sourceId || video.videoId}/mqdefault.jpg`}
+                                                                    alt={video.title}
+                                                                    className="w-full aspect-video object-cover"
+                                                                />
+                                                                <div className="p-2">
+                                                                    <h4 className="text-xs font-medium line-clamp-2 text-gray-200">{video.title}</h4>
+                                                                    <p className="text-xs text-gray-500 mt-1">{video.notes?.length || 0} notes</p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Favorited Notes Section */}
+                                        {allFavoritedNotes.length > 0 && (
+                                            <div className="bg-gray-800 rounded-lg p-4 mb-4">
+                                                <button
+                                                    onClick={() => setShowFavoritedNotes(v => !v)}
+                                                    className="w-full flex items-center justify-between text-left gap-2 group"
+                                                >
+                                                    <span className="flex items-center gap-2 text-sm font-semibold text-gray-300">
+                                                        <span className="text-yellow-400"><Icons.StarFilled /></span>
+                                                        Favorited Notes
+                                                        <span className="text-xs text-gray-500 font-normal">({allFavoritedNotes.length})</span>
+                                                    </span>
+                                                    <span className={`text-gray-500 group-hover:text-gray-300 transition-transform ${showFavoritedNotes ? 'rotate-180' : ''}`}>
+                                                        <Icons.ChevronDown />
+                                                    </span>
+                                                </button>
+                                                {showFavoritedNotes && (
+                                                    <div className="mt-3 max-h-80 overflow-y-auto scrollbar-thin space-y-2">
+                                                        {allFavoritedNotes.map(note => (
+                                                            <div
+                                                                key={note.id}
+                                                                className="flex items-start gap-3 p-2 rounded-lg bg-gray-700 hover:bg-gray-600 cursor-pointer transition-colors"
+                                                                onClick={() => handleNavigateToNote(note.videoId, note.timestamp)}
+                                                            >
+                                                                <button className="flex items-center gap-1 text-emerald-400 text-xs font-medium shrink-0 mt-0.5">
+                                                                    <Icons.Play />
+                                                                    {formatTime(note.timestamp)}
+                                                                </button>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-xs text-gray-400 truncate">{note.videoTitle}</p>
+                                                                    <p className="text-sm text-gray-200 line-clamp-2 mt-0.5">{note.text}</p>
+                                                                </div>
+                                                                <span className="text-yellow-400 shrink-0 mt-0.5"><Icons.StarFilled /></span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {sortedVideos.length > 0 ? (
                                             libraryViewMode === 'grid' ? (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -7591,14 +7751,31 @@ Third subtitle text`}
                                                             {displayVideo.notes.filter(n => n.text.toLowerCase().includes(noteSearch.toLowerCase())).length} of {displayVideo.notes.length} notes
                                                         </p>
                                                     )}
+                                                    <button
+                                                        onClick={() => setShowFavoritesFirst(v => !v)}
+                                                        className={`mt-2 flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
+                                                            showFavoritesFirst
+                                                                ? 'bg-yellow-500/20 text-yellow-400'
+                                                                : 'bg-gray-700 text-gray-400 hover:text-gray-300'
+                                                        }`}
+                                                    >
+                                                        <Icons.StarFilled />
+                                                        Favorites first
+                                                    </button>
                                                 </div>
                                             )}
                                             <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
                                                 {displayVideo.notes?.length > 0 ? (
                                                     (() => {
-                                                        const filteredNotes = noteSearch
+                                                        let filteredNotes = noteSearch
                                                             ? displayVideo.notes.filter(n => n.text.toLowerCase().includes(noteSearch.toLowerCase()))
-                                                            : displayVideo.notes;
+                                                            : [...displayVideo.notes];
+                                                        if (showFavoritesFirst) {
+                                                            filteredNotes = [
+                                                                ...filteredNotes.filter(n => n.favorite),
+                                                                ...filteredNotes.filter(n => !n.favorite)
+                                                            ];
+                                                        }
                                                         return filteredNotes.length > 0 ? (
                                                             filteredNotes.map(note => (
                                                                 <NoteItem
@@ -7607,6 +7784,7 @@ Third subtitle text`}
                                                                     onSeek={handleSeek}
                                                                     onDelete={handleDeleteNote}
                                                                     onEdit={handleEditNote}
+                                                                    onToggleFavorite={handleToggleFavorite}
                                                                     searchTerm={noteSearch}
                                                                 />
                                                             ))

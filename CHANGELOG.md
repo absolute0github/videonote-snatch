@@ -4,6 +4,18 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.2.0] - 2026-02-22
+
+### Added
+- **Favorite Notes**: Star button on each note to mark it as a favorite (yellow when active, gray when not). Favorites persist via existing `/bookmarks` sync.
+- **Favorites First Toggle**: Toggle button in the notes panel to sort favorited notes to the top while preserving timestamp order within groups.
+- **Recently Watched Section**: Expandable section on the library page showing the last 5 watched videos with thumbnails, titles, and note counts. Tracks `lastWatchedAt` timestamp when videos are opened.
+- **Favorited Notes Section**: Expandable section on the library page listing all favorited notes across all videos. Clicking a note navigates to the video and seeks to the timestamp.
+- **Star/StarFilled/ChevronDown icons**: New SVG icons added to the Icons object.
+
+### Files Modified
+- `app.html` — Added icons, state variables, handlers (`handleToggleFavorite`, `handleNavigateToNote`), updated `NoteItem` component, added library sections, updated `incrementViewCount` to track `lastWatchedAt`
+
 ## [3.1.2] - 2026-02-22
 
 ### Changed
