@@ -4,6 +4,23 @@ All notable changes to **ClipMark** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.3.0] - 2026-03-06
+
+### Added
+- **Admin Dashboard: Last Login column** — shows the date/time of each user's most recent session login
+- **Admin Dashboard: Videos & Notes panel** — each user row has an expand button (chevron) that reveals all their bookmarked videos with thumbnails and full note list (including timestamps and favorite stars)
+  - Backend `getAdminStats()` now includes `lastLogin` (derived from sessions) and a `videos` array with notes per user
+  - Frontend adds `formatDateTime` and `formatTimestamp` helpers
+  - Expand/collapse state tracked per user with `expandedUser` state
+
+### Changed
+- Suspended user status badge color corrected to red (was showing emerald/green)
+- Delete button now uses red color scheme for clarity
+
+### Files Modified
+- `transcript-server.js` — `getAdminStats()` updated to return `lastLogin` and `videos`
+- `app.html` — `AdminDashboard` component updated with new column, helpers, and expand panel
+
 ## [3.2.1] - 2026-02-22
 
 ### Changed

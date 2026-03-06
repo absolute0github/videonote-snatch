@@ -752,10 +752,20 @@ function writeUserWatchTime(userId, watchTime) {
 // Get admin stats for all users
 function getAdminStats() {
     const users = readUsers();
+    const sessions = readSessions();
     const userStats = [];
     let totalVideos = 0;
     let totalNotes = 0;
     let totalWatchTime = 0;
+
+    // Build a map of userId -> most recent session createdAt
+    const lastLoginMap = {};
+    for (const session of Object.values(sessions)) {
+        const { userId, createdAt } = session;
+        if (!lastLoginMap[userId] || createdAt > lastLoginMap[userId]) {
+            lastLoginMap[userId] = createdAt;
+        }
+    }
 
     for (const [userId, user] of Object.entries(users)) {
         const bookmarks = readUserBookmarks(userId);
@@ -764,8 +774,24 @@ function getAdminStats() {
         // Calculate video and note counts
         const videoCount = bookmarks.length;
         let noteCount = 0;
-        bookmarks.forEach(video => {
-            noteCount += (video.notes || []).length;
+        const videos = bookmarks.map(video => {
+            const notes = video.notes || [];
+            noteCount += notes.length;
+            return {
+                id: video.id,
+                title: video.title || 'Untitled',
+                sourceType: video.sourceType || 'youtube',
+                sourceUrl: video.sourceUrl || null,
+                videoId: video.videoId || video.sourceId || null,
+                thumbnail: video.thumbnail || null,
+                notes: notes.map(n => ({
+                    id: n.id,
+                    text: n.text,
+                    timestamp: n.timestamp,
+                    createdAt: n.createdAt,
+                    favorite: n.favorite || false
+                }))
+            };
         });
 
         // Calculate total watch time for this user
@@ -779,10 +805,12 @@ function getAdminStats() {
             userId,
             username: user.username,
             createdAt: user.createdAt,
+            lastLogin: lastLoginMap[userId] || null,
             suspended: user.suspended || false,
             videoCount,
             noteCount,
-            watchTime: userWatchTime
+            watchTime: userWatchTime,
+            videos
         });
     }
 
