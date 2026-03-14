@@ -3762,6 +3762,24 @@ Format your response as JSON with a "message" field explaining this, and include
         return;
     }
 
+    // Chrome extension download
+    if (url.pathname === '/download/chrome-extension') {
+        const zipPath = path.join(__dirname, 'chrome-extension.zip');
+        if (fs.existsSync(zipPath)) {
+            const stat = fs.statSync(zipPath);
+            res.writeHead(200, {
+                'Content-Type': 'application/zip',
+                'Content-Disposition': 'attachment; filename="clipmark-chrome-extension.zip"',
+                'Content-Length': stat.size
+            });
+            fs.createReadStream(zipPath).pipe(res);
+        } else {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Extension download not available' }));
+        }
+        return;
+    }
+
     if (url.pathname === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok' }));

@@ -176,7 +176,7 @@
     const btn = document.createElement('button');
     btn.id = 'clipmark-btn';
     btn.title = 'Save to ClipMark';
-    btn.innerHTML = '<span class="cm-icon">📌</span><span>Clip</span>';
+    btn.innerHTML = '<span class="cm-icon">📌</span><span>Add to ClipMark</span>';
     btn.addEventListener('click', showModal);
 
     // Insert after the last button
