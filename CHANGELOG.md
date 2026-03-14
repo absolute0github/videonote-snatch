@@ -20,6 +20,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Files Modified
 - `transcript-server.js` — `getAdminStats()` updated to return `lastLogin` and `videos`
 - `app.html` — `AdminDashboard` component updated with new column, helpers, and expand panel
+## [3.4.0] - 2026-03-14
+
+### Added
+- **Quick-Add API** (`POST /api/clips/quick-add`): External endpoint for adding videos to your library
+  - Bearer token auth (same as existing session system)
+  - Accepts `{ url, note?, timestamp?, tags? }` — auto-detects source type (YouTube, Vimeo, Loom, Wistia, Google Drive, X/Twitter, direct)
+  - Auto-fetches metadata (title, thumbnail, description) via YouTube API / oEmbed
+  - Duplicate detection (409 if URL already bookmarked)
+  - Rate limited: 30 requests/hour per user
+  - Response codes: 201, 400, 401, 409, 429
+- **Chrome Extension** (`chrome-extension/`): "ClipMark - Save to Library" (Manifest V3)
+  - Injects 📌 "Clip" button into YouTube's action bar (below video, next to Like/Share)
+  - One-click save with optional note and automatic timestamp capture
+  - Floating modal for adding notes with Ctrl/Cmd+Enter shortcut
+  - Toast notifications for success/error feedback
+  - Popup settings: login with username/password or manual token entry
+  - Connection status indicator (green/red dot)
+  - Handles YouTube SPA navigation (`yt-navigate-finish` event)
+  - MutationObserver fallback for button re-injection
+  - Emerald brand colors matching ClipMark design
+- **URL parsing utility** (`parseVideoUrl`): Server-side function to parse video URLs into sourceType/sourceId
+- **Metadata fetching utility** (`fetchVideoMetadata`): Server-side function supporting YouTube API, Vimeo/Wistia/Loom/Twitter oEmbed
+
+### Files Modified
+- `transcript-server.js`: Added quick-add endpoint, rate limiter, URL parser, metadata fetcher
+- `chrome-extension/manifest.json`: Extension manifest (Manifest V3)
+- `chrome-extension/popup.html` / `popup.js`: Settings/login popup
+- `chrome-extension/content.js` / `content.css`: YouTube content script + styles
+- `chrome-extension/generate-icons.js`: Icon generator script
+- `chrome-extension/icons/`: Generated PNG icons (16x16, 48x48, 128x128)
+
 ## [3.3.0] - 2026-03-04
 
 ### Added

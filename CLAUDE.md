@@ -33,10 +33,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Recently Watched**: Expandable library section showing last 5 opened videos with thumbnails
 - **Favorited Notes Section**: Expandable library section listing all favorited notes; click to navigate to video and seek to timestamp
 - **Backup & Restore**: Export structured backup JSON with metadata; import with merge (deduplicate) or replace strategy via preview modal
+- **Quick-Add API**: External endpoint (`POST /api/clips/quick-add`) for adding videos from URLs with auto-metadata fetching
+- **Chrome Extension**: "ClipMark - Save to Library" — one-click video saving from YouTube with timestamp capture and optional notes
 
 ## Architecture
 
 The app is a **single HTML file** (`app.html`) with React components embedded using JSX compiled by Babel. There is no build process—it runs directly in the browser. A separate landing page (`index.html`) provides marketing content with feature descriptions and CTAs linking to `/app`. It also handles share token redirects (`?share_token=...` → `/app?share_token=...`).
+
+A **Chrome Extension** (`chrome-extension/`) provides one-click video saving from YouTube. It injects a 📌 button into YouTube's UI and communicates with the backend via `POST /api/clips/quick-add`.
 
 ### Data Flow
 
@@ -177,6 +181,14 @@ When the app loads:
 |--------|----------|-------------|
 | GET | `/api/backup/export` | Download structured backup JSON with metadata (auth required) |
 | POST | `/api/backup/import` | Import backup with `strategy` field: `"merge"` or `"replace"` (auth required) |
+
+### Quick-Add API (Chrome Extension / External)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/clips/quick-add` | Add video to library from URL (rate limited: 30/hour) |
+
+**Body**: `{ url: string, note?: string, timestamp?: number, tags?: string[] }`
+**Responses**: 201 created, 400 bad URL, 401 unauth, 409 duplicate, 429 rate limited
 
 ### Transcript Endpoints
 | Method | Endpoint | Description |

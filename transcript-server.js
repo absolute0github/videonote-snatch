@@ -278,6 +278,11 @@ const transcriptionAttempts = new Map(); // Map<userId, {count, resetAt}>
 const MAX_TRANSCRIPTIONS_PER_HOUR = 5;
 const TRANSCRIPTION_RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
 
+// Rate limiting for quick-add API
+const quickAddAttempts = new Map(); // Map<userId, {count, resetAt}>
+const MAX_QUICK_ADDS_PER_HOUR = 30;
+const QUICK_ADD_RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
+
 // =============================================
 // SRT/VTT TRANSCRIPT PARSING
 // =============================================
@@ -460,6 +465,185 @@ function recordTranscriptionAttempt(userId) {
     } else {
         record.count++;
     }
+}
+
+// Quick-add rate limiter
+function checkQuickAddRateLimit(userId) {
+    const now = Date.now();
+    const record = quickAddAttempts.get(userId);
+
+    if (!record || now > record.resetAt) {
+        return { allowed: true, remaining: MAX_QUICK_ADDS_PER_HOUR };
+    }
+
+    if (record.count >= MAX_QUICK_ADDS_PER_HOUR) {
+        const waitTime = Math.ceil((record.resetAt - now) / 60000);
+        return { allowed: false, remaining: 0, waitMinutes: waitTime };
+    }
+
+    return { allowed: true, remaining: MAX_QUICK_ADDS_PER_HOUR - record.count };
+}
+
+function recordQuickAddAttempt(userId) {
+    const now = Date.now();
+    const record = quickAddAttempts.get(userId);
+
+    if (!record || now > record.resetAt) {
+        quickAddAttempts.set(userId, {
+            count: 1,
+            resetAt: now + QUICK_ADD_RATE_LIMIT_WINDOW
+        });
+    } else {
+        record.count++;
+    }
+}
+
+// Parse video URL into sourceType and sourceId
+function parseVideoUrl(videoUrl) {
+    try {
+        const urlObj = new URL(videoUrl);
+        const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+
+        // YouTube
+        if (hostname === 'youtube.com' || hostname === 'm.youtube.com' || hostname === 'youtu.be') {
+            let videoId = null;
+            if (hostname === 'youtu.be') {
+                videoId = urlObj.pathname.slice(1).split('/')[0];
+            } else {
+                videoId = urlObj.searchParams.get('v');
+                if (!videoId) {
+                    // Handle /embed/ID or /shorts/ID
+                    const pathMatch = urlObj.pathname.match(/\/(embed|shorts|live)\/([^/?]+)/);
+                    if (pathMatch) videoId = pathMatch[2];
+                }
+            }
+            if (videoId) return { sourceType: 'youtube', sourceId: videoId };
+        }
+
+        // Vimeo
+        if (hostname === 'vimeo.com' || hostname === 'player.vimeo.com') {
+            const match = urlObj.pathname.match(/\/(?:video\/)?(\d+)/);
+            if (match) return { sourceType: 'vimeo', sourceId: match[1] };
+        }
+
+        // Loom
+        if (hostname === 'loom.com' || hostname === 'www.loom.com') {
+            const match = urlObj.pathname.match(/\/share\/([a-f0-9]+)/);
+            if (match) return { sourceType: 'loom', sourceId: match[1] };
+        }
+
+        // Wistia
+        if (hostname.endsWith('.wistia.com') || hostname === 'fast.wistia.net') {
+            const match = urlObj.pathname.match(/\/medias\/([a-zA-Z0-9]+)/);
+            if (match) return { sourceType: 'wistia', sourceId: match[1] };
+        }
+
+        // Google Drive
+        if (hostname === 'drive.google.com') {
+            const match = urlObj.pathname.match(/\/file\/d\/([^/]+)/);
+            if (match) return { sourceType: 'googledrive', sourceId: match[1] };
+        }
+
+        // X / Twitter
+        if (hostname === 'twitter.com' || hostname === 'x.com') {
+            const match = urlObj.pathname.match(/\/[^/]+\/status\/(\d+)/);
+            if (match) return { sourceType: 'twitter', sourceId: match[1] };
+        }
+
+        // Direct video URLs
+        if (/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(urlObj.pathname)) {
+            return { sourceType: 'direct', sourceId: null, sourceUrl: videoUrl };
+        }
+
+        return null; // Unsupported
+    } catch (e) {
+        return null;
+    }
+}
+
+// Fetch video metadata from URL (title, thumbnail, description)
+async function fetchVideoMetadata(sourceType, sourceId, sourceUrl) {
+    const metadata = { title: '', thumbnail: '', description: '' };
+
+    try {
+        if (sourceType === 'youtube' && sourceId) {
+            // Try YouTube API first if configured
+            if (YOUTUBE_API_KEY) {
+                const ytResponse = await fetchUrl(
+                    `https://www.googleapis.com/youtube/v3/videos?id=${sourceId}&part=snippet&key=${YOUTUBE_API_KEY}`
+                );
+                if (ytResponse.status === 200) {
+                    const data = JSON.parse(ytResponse.data);
+                    const video = data.items?.[0];
+                    if (video) {
+                        metadata.title = video.snippet?.title || '';
+                        metadata.thumbnail = video.snippet?.thumbnails?.high?.url || video.snippet?.thumbnails?.default?.url || '';
+                        metadata.description = video.snippet?.description || '';
+                        metadata.publishDate = video.snippet?.publishedAt || '';
+                        metadata.channelTitle = video.snippet?.channelTitle || '';
+                        return metadata;
+                    }
+                }
+            }
+            // Fallback: oEmbed
+            const oembedResp = await fetchUrl(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${sourceId}&format=json`);
+            if (oembedResp.status === 200) {
+                const data = JSON.parse(oembedResp.data);
+                metadata.title = data.title || '';
+                metadata.thumbnail = `https://i.ytimg.com/vi/${sourceId}/hqdefault.jpg`;
+                return metadata;
+            }
+        }
+
+        if (sourceType === 'vimeo' && sourceId) {
+            const oembedResp = await fetchUrl(`https://vimeo.com/api/oembed.json?url=https://vimeo.com/${sourceId}`);
+            if (oembedResp.status === 200) {
+                const data = JSON.parse(oembedResp.data);
+                metadata.title = data.title || '';
+                metadata.thumbnail = data.thumbnail_url || '';
+                metadata.description = data.description || '';
+                return metadata;
+            }
+        }
+
+        if (sourceType === 'wistia' && sourceId) {
+            const oembedResp = await fetchUrl(`https://fast.wistia.com/oembed?url=https://fast.wistia.com/medias/${sourceId}&format=json`);
+            if (oembedResp.status === 200) {
+                const data = JSON.parse(oembedResp.data);
+                metadata.title = data.title || '';
+                metadata.thumbnail = data.thumbnail_url || '';
+                return metadata;
+            }
+        }
+
+        if (sourceType === 'loom' && sourceId) {
+            const oembedResp = await fetchUrl(`https://www.loom.com/v1/oembed?url=https://www.loom.com/share/${sourceId}`);
+            if (oembedResp.status === 200) {
+                const data = JSON.parse(oembedResp.data);
+                metadata.title = data.title || '';
+                metadata.thumbnail = data.thumbnail_url || '';
+                return metadata;
+            }
+        }
+
+        if (sourceType === 'twitter' && sourceId) {
+            const oembedResp = await fetchUrl(`https://publish.twitter.com/oembed?url=https://twitter.com/i/status/${sourceId}&format=json`);
+            if (oembedResp.status === 200) {
+                const data = JSON.parse(oembedResp.data);
+                metadata.title = data.author_name ? `${data.author_name} on X` : `Tweet ${sourceId}`;
+                return metadata;
+            }
+        }
+
+        // Direct / Google Drive — just use URL as title
+        if (sourceType === 'direct' || sourceType === 'googledrive') {
+            metadata.title = sourceUrl ? sourceUrl.split('/').pop().split('?')[0] : `Video ${sourceId || ''}`;
+        }
+    } catch (e) {
+        console.error(`⚠️ Error fetching metadata for ${sourceType}:${sourceId}:`, e.message);
+    }
+
+    return metadata;
 }
 
 // Session duration: 30 days
@@ -2835,6 +3019,132 @@ const server = http.createServer(async (req, res) => {
             console.error('Error deleting user:', e.message);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Failed to delete user' }));
+        }
+        return;
+    }
+
+    // =============================================
+    // QUICK-ADD API (Chrome Extension / External)
+    // =============================================
+
+    if (url.pathname === '/api/clips/quick-add' && req.method === 'POST') {
+        const userId = authenticateRequest(req);
+
+        if (!userId) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Authentication required' }));
+            return;
+        }
+
+        // Check rate limit
+        const rateLimit = checkQuickAddRateLimit(userId);
+        if (!rateLimit.allowed) {
+            res.writeHead(429, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                error: `Rate limit exceeded. You can quick-add up to ${MAX_QUICK_ADDS_PER_HOUR} clips per hour. Try again in ${rateLimit.waitMinutes} minutes.`
+            }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { url: videoUrl, note, timestamp, tags } = body || {};
+
+            if (!videoUrl) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'URL is required' }));
+                return;
+            }
+
+            // Parse URL into sourceType and sourceId
+            const parsed = parseVideoUrl(videoUrl);
+            if (!parsed) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unsupported video URL. Supported: YouTube, Vimeo, Loom, Wistia, Google Drive, X/Twitter, or direct video links (.mp4, .webm)' }));
+                return;
+            }
+
+            const { sourceType, sourceId, sourceUrl } = parsed;
+
+            // Check for duplicates
+            const bookmarks = readUserBookmarks(userId);
+            const isDuplicate = bookmarks.some(b => {
+                if (sourceType === 'direct') {
+                    return b.sourceType === 'direct' && b.sourceUrl === videoUrl;
+                }
+                return b.sourceType === sourceType && b.sourceId === sourceId;
+            });
+
+            if (isDuplicate) {
+                res.writeHead(409, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'This video is already in your library' }));
+                return;
+            }
+
+            // Fetch metadata
+            const metadata = await fetchVideoMetadata(sourceType, sourceId, sourceUrl || videoUrl);
+
+            // Build video bookmark object matching Video data structure
+            const videoId = uuidv4();
+            const now = new Date().toISOString();
+            const video = {
+                id: videoId,
+                title: metadata.title || `Untitled ${sourceType} video`,
+                sourceType: sourceType,
+                sourceId: sourceId || null,
+                sourceUrl: sourceType === 'direct' ? videoUrl : (sourceUrl || videoUrl),
+                // Legacy YouTube field for backward compat
+                videoId: sourceType === 'youtube' ? sourceId : null,
+                category: '',
+                tags: Array.isArray(tags) ? tags : [],
+                notes: [],
+                thumbnail: metadata.thumbnail || '',
+                description: metadata.description || '',
+                publishDate: metadata.publishDate || '',
+                viewCount: 0,
+                lastWatchedAt: null,
+                addedAt: now
+            };
+
+            // Add note if provided
+            if (note && typeof note === 'string' && note.trim()) {
+                video.notes.push({
+                    id: uuidv4(),
+                    text: note.trim(),
+                    timestamp: typeof timestamp === 'number' ? timestamp : 0,
+                    createdAt: now,
+                    autoGenerated: false,
+                    aiGenerated: false,
+                    favorite: false
+                });
+            }
+
+            // Append to bookmarks and save
+            bookmarks.push(video);
+            if (!writeUserBookmarks(userId, bookmarks)) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to save bookmark' }));
+                return;
+            }
+
+            // Record rate limit
+            recordQuickAddAttempt(userId);
+
+            console.log(`📌 Quick-add: ${sourceType} video "${video.title}" added by user ${userId}`);
+            res.writeHead(201, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                video: {
+                    id: videoId,
+                    title: video.title,
+                    sourceType: sourceType,
+                    thumbnail: video.thumbnail
+                }
+            }));
+        } catch (e) {
+            console.error('Quick-add error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to add video' }));
         }
         return;
     }
